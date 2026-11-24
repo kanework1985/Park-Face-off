@@ -1,0 +1,3731 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#1c1410" />
+  <title>雙模式中國象棋：傳統大盤 × 台灣暗棋</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- PeerJS CDN (P2P Multiplayer & Voice) -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- QRCode.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Google Fonts: Noto Serif TC for Classical Chinese Chess Aesthetics -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;700;900&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --wood-dark: #1c1410;
+      --wood-mid: #3a2618;
+      --wood-board: #e4be83;
+      --wood-board-dark: #c99853;
+      --ink-line: #4a2d13;
+      --gold-accent: #f5c869;
+      --red-piece: #b91c1c;
+      --black-piece: #18181b;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 30%, #3b2618 0%, #1c120c 70%, #100a07 100%);
+      color: #f5ebe0;
+      font-family: "Noto Serif TC", "DFKai-SB", "BiauKai", "PingFang TC", "Microsoft JhengHei", serif;
+      touch-action: manipulation;
+    }
+
+    /* Fullscreen Wallpaper Layer */
+    #game-wallpaper-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: background-image 0.8s ease-in-out, opacity 0.5s ease, filter 0.3s ease;
+      pointer-events: none;
+    }
+
+    #game-wallpaper-mask {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background-color: rgba(18, 12, 8, 0.58);
+      pointer-events: none;
+      transition: background-color 0.25s ease;
+    }
+
+    #app-root {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Classical Wood Panel */
+    .wood-panel {
+      background: linear-gradient(145deg, rgba(46, 30, 20, 0.9), rgba(26, 17, 11, 0.94));
+      border: 1px solid rgba(245, 200, 105, 0.28);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 230, 175, 0.14);
+      backdrop-filter: blur(8px);
+    }
+
+    .gold-btn {
+      background: linear-gradient(180deg, #e5b354 0%, #b87c24 100%);
+      color: #1f1206;
+      font-weight: 900;
+      border: 1px solid #fde3a7;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+      transition: transform 0.12s ease, filter 0.15s ease;
+    }
+    .gold-btn:hover { filter: brightness(1.08); }
+    .gold-btn:active { transform: scale(0.96); }
+
+    .wood-btn {
+      background: linear-gradient(180deg, #4b3120 0%, #2d1c12 100%);
+      color: #f6e7ce;
+      border: 1px solid rgba(245, 200, 105, 0.35);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+      transition: transform 0.12s ease, background 0.15s ease;
+    }
+    .wood-btn:hover { background: linear-gradient(180deg, #5d3d28 0%, #3a2417 100%); }
+    .wood-btn:active { transform: scale(0.96); }
+
+    /* Traditional Board Container */
+    .xiangqi-board-frame {
+      position: relative;
+      background:
+        repeating-linear-gradient(90deg, rgba(120, 74, 28, 0.05) 0px, rgba(120, 74, 28, 0.05) 3px, transparent 3px, transparent 11px),
+        linear-gradient(135deg, #ecc98e 0%, #d8aa63 52%, #c79348 100%);
+      border: 5px solid #4d2e14;
+      border-radius: 12px;
+      box-shadow:
+        0 14px 36px rgba(0, 0, 0, 0.68),
+        inset 0 0 18px rgba(74, 45, 19, 0.35),
+        0 0 0 2px rgba(245, 200, 105, 0.35);
+    }
+
+    /* Piece 3D Disc Styling */
+    .chess-piece {
+      position: relative;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: "DFKai-SB", "BiauKai", "KaiTi", "Noto Serif TC", serif;
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.18s ease;
+      background: radial-gradient(circle at 32% 28%, #fff8e7 0%, #f0d7a7 58%, #cca467 100%);
+      box-shadow:
+        0 4px 7px rgba(0, 0, 0, 0.55),
+        inset 0 2px 2px rgba(255, 255, 255, 0.85),
+        inset 0 -3px 5px rgba(102, 61, 20, 0.45);
+      border: 1.5px solid #8a5a26;
+      line-height: 1;
+    }
+
+    .chess-piece::after {
+      content: "";
+      position: absolute;
+      inset: 10%;
+      border-radius: 50%;
+      border: 1.5px solid currentColor;
+      opacity: 0.65;
+      pointer-events: none;
+    }
+
+    .chess-piece.piece-red {
+      color: var(--red-piece);
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+    }
+    .chess-piece.piece-black {
+      color: var(--black-piece);
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+    }
+
+    .chess-piece.selected {
+      transform: scale(1.1) translateY(-2px);
+      box-shadow:
+        0 0 0 3px #facc15,
+        0 0 18px 4px rgba(250, 204, 21, 0.8),
+        0 8px 16px rgba(0, 0, 0, 0.6);
+      z-index: 25;
+    }
+
+    .chess-piece.last-moved {
+      box-shadow:
+        0 0 0 2.5px #38bdf8,
+        0 4px 10px rgba(0, 0, 0, 0.55);
+    }
+
+    .chess-piece.in-check {
+      animation: checkPulse 0.9s infinite;
+    }
+
+    @keyframes checkPulse {
+      0%, 100% { box-shadow: 0 0 0 3px #ef4444, 0 0 16px rgba(239, 68, 68, 0.9); }
+      50% { box-shadow: 0 0 0 5px #fca5a5, 0 0 26px rgba(239, 68, 68, 1); }
+    }
+
+    /* Dark Chess Face-down Piece & 3D Flip Animation */
+    .dark-cell {
+      position: relative;
+      border: 1.5px solid rgba(74, 45, 19, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      perspective: 600px;
+    }
+
+    .dark-piece-hidden {
+      width: 84%;
+      height: 84%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 32% 28%, #2e7d52 0%, #174c30 65%, #0c2b1a 100%);
+      border: 2px solid #c59b4f;
+      box-shadow:
+        0 4px 8px rgba(0, 0, 0, 0.55),
+        inset 0 2px 4px rgba(255, 255, 255, 0.25),
+        inset 0 -3px 6px rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(245, 200, 105, 0.78);
+      font-weight: 900;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    .dark-piece-hidden:hover {
+      transform: scale(1.05);
+      filter: brightness(1.12);
+    }
+
+    @keyframes flipReveal {
+      0% { transform: rotateY(90deg) scale(0.85); opacity: 0.4; }
+      60% { transform: rotateY(-12deg) scale(1.08); opacity: 1; }
+      100% { transform: rotateY(0deg) scale(1); opacity: 1; }
+    }
+    .flip-animate {
+      animation: flipReveal 0.36s ease-out;
+    }
+
+    /* Move / Capture Indicators */
+    .move-dot {
+      width: 32%;
+      height: 32%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(250, 204, 21, 0.95) 0%, rgba(217, 119, 6, 0.75) 100%);
+      box-shadow: 0 0 8px rgba(250, 204, 21, 0.85);
+      pointer-events: none;
+    }
+
+    .capture-ring {
+      position: absolute;
+      inset: 4%;
+      border-radius: 50%;
+      border: 3px dashed #ef4444;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.85), inset 0 0 8px rgba(239, 68, 68, 0.4);
+      pointer-events: none;
+      z-index: 26;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb { background: rgba(245, 200, 105, 0.4); border-radius: 99px; }
+
+    /* Landscape Short-Screen Compact Mode (Mandatory Spec) */
+    @media (orientation: landscape) and (max-height: 540px) {
+      .hide-on-short-landscape {
+        display: none !important;
+      }
+      #top-header {
+        padding-top: 0.2rem !important;
+        padding-bottom: 0.2rem !important;
+        min-height: 38px !important;
+      }
+      #lobby-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.5rem !important;
+      }
+      #waiting-grid {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.5rem !important;
+      }
+      #game-stage {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0.5rem !important;
+        padding: 0.25rem 0.5rem !important;
+      }
+      .side-hud-col {
+        width: clamp(135px, 21vw, 210px) !important;
+        flex-direction: column !important;
+        height: 100% !important;
+        justify-content: space-between !important;
+      }
+      #board-wrapper {
+        height: calc(100dvh - 46px) !important;
+        max-height: calc(100dvh - 46px) !important;
+      }
+      .compact-pad {
+        padding: 0.35rem 0.5rem !important;
+      }
+      .compact-text {
+        font-size: 0.72rem !important;
+      }
+    }
+
+    /* Desktop Wide Layout for Game Stage */
+    @media (min-width: 1024px) and (min-height: 541px) {
+      #game-stage {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 1.25rem;
+      }
+      .side-hud-col {
+        width: 240px;
+        flex-direction: column;
+        height: min(82dvh, 660px);
+        justify-content: space-between;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Fullscreen Background Wallpaper & Overlay Mask -->
+  <div id="game-wallpaper-layer"></div>
+  <div id="game-wallpaper-mask"></div>
+
+  <!-- Toast Container (Replaces native alert()) -->
+  <div id="toast-container" class="fixed top-14 left-1/2 -translate-x-1/2 z-[120] flex flex-col items-center gap-2 pointer-events-none w-[92vw] max-w-md"></div>
+
+  <!-- Main App Root -->
+  <div id="app-root">
+    <!-- Top Global Toolbar -->
+    <header id="top-header" class="shrink-0 w-full px-3 py-1.5 flex items-center justify-between bg-black/50 border-b border-amber-500/25 backdrop-blur-md z-30">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="w-7 h-7 rounded-full bg-gradient-to-br from-amber-300 to-amber-700 text-stone-950 font-black flex items-center justify-center text-sm shadow shrink-0 border border-amber-200">帥</span>
+        <div class="truncate">
+          <h1 class="text-sm sm:text-base font-black tracking-wide text-amber-200 leading-tight truncate">雙模式中國象棋</h1>
+          <p class="text-[10px] text-amber-100/70 leading-tight hide-on-short-landscape">傳統大盤 9×10 × 台灣暗棋 4×8</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 shrink-0">
+        <!-- Pending Mid-game Join Approval Badge (Host Only) -->
+        <button id="btn-pending-joins" class="hidden px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold animate-pulse border border-rose-300 flex items-center gap-1">
+          <span>🔔 申請</span>
+          <span id="pending-join-count" class="bg-black/40 px-1.5 rounded-full">0</span>
+        </button>
+
+        <!-- Audio Unlock / Voice Quick Toggle -->
+        <button id="btn-wake-lock" title="螢幕恆亮防休眠" class="wood-btn px-2 py-1 rounded-lg text-xs flex items-center gap-1">
+          <span>☀️</span><span class="hidden sm:inline">恆亮</span>
+        </button>
+        <button id="btn-fullscreen" title="全螢幕切換" class="wood-btn px-2 py-1 rounded-lg text-xs flex items-center gap-1">
+          <span>⛶</span><span class="hidden sm:inline">全螢幕</span>
+        </button>
+        <button id="btn-open-settings" title="系統與桌布設定" class="wood-btn px-2 py-1 rounded-lg text-xs flex items-center gap-1">
+          <span>⚙️</span><span class="hidden sm:inline">設定</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== VIEW 1: LOBBY ==================== -->
+    <main id="view-lobby" class="flex-1 overflow-y-auto px-3 py-2 sm:py-4 flex flex-col items-center justify-center">
+      <div class="w-full max-w-4xl flex flex-col gap-2.5 sm:gap-4">
+        <!-- Title Banner -->
+        <div class="text-center hide-on-short-landscape">
+          <h2 class="text-xl sm:text-3xl font-black text-amber-200 drop-shadow">楚河漢界・棋逢對手</h2>
+          <p class="text-xs sm:text-sm text-amber-100/75 mt-0.5">跨裝置 P2P 多人連線・支援本機雙人與三階智慧 AI</p>
+        </div>
+
+        <!-- Player Nickname & Mode Selection Strip -->
+        <div class="wood-panel rounded-2xl p-2.5 sm:p-4 compact-pad">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 items-end">
+            <div>
+              <label class="block text-xs text-amber-200/90 font-bold mb-1">玩家暱稱</label>
+              <input id="input-nickname" type="text" maxlength="12" placeholder="輸入棋士大名..." class="w-full px-3 py-2 rounded-xl bg-black/45 border border-amber-400/35 text-amber-50 text-sm focus:outline-none focus:border-amber-300" />
+            </div>
+            <div>
+              <label class="block text-xs text-amber-200/90 font-bold mb-1">象棋玩法模式</label>
+              <div class="grid grid-cols-2 gap-1.5">
+                <button id="mode-btn-traditional" class="py-2 px-2 rounded-xl text-xs sm:text-sm font-bold border transition">🏯 傳統大盤</button>
+                <button id="mode-btn-dark" class="py-2 px-2 rounded-xl text-xs sm:text-sm font-bold border transition">🎴 台灣暗棋</button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs text-amber-200/90 font-bold mb-1">賽制與特殊規則</label>
+              <div class="flex items-center gap-1.5">
+                <select id="select-match-format" class="flex-1 px-2 py-2 rounded-xl bg-black/45 border border-amber-400/35 text-amber-50 text-xs sm:text-sm focus:outline-none">
+                  <option value="BO1">單局決勝 (BO1)</option>
+                  <option value="BO3">三戰兩勝 (BO3)</option>
+                </select>
+                <label id="wrap-chain-capture" class="hidden items-center gap-1 px-2 py-2 rounded-xl bg-black/35 border border-amber-400/25 text-xs text-amber-100 cursor-pointer shrink-0">
+                  <input id="chk-chain-capture" type="checkbox" class="accent-amber-400" />
+                  <span>連吃</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Two-Column Create / Join + Quick Local/AI Panel -->
+        <div id="lobby-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+          <!-- Left: Create Room / Quick Solo / Local 2P -->
+          <div class="wood-panel rounded-2xl p-3 sm:p-4 compact-pad flex flex-col justify-between gap-2.5">
+            <div>
+              <h3 class="text-sm sm:text-base font-black text-amber-300 flex items-center gap-1.5">
+                <span>🏮</span><span>建立新房間 / 快速開局</span>
+              </h3>
+              <p class="text-[11px] sm:text-xs text-amber-100/70 mt-0.5 hide-on-short-landscape">
+                建立線上對戰房邀請好友，或直接進行單人 AI 挑戰與同屏雙人對弈。
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-amber-200/80 shrink-0">AI 難度：</span>
+              <select id="lobby-ai-level" class="flex-1 px-2.5 py-1.5 rounded-xl bg-black/45 border border-amber-400/35 text-amber-50 text-xs sm:text-sm">
+                <option value="novice">🌱 放水新手</option>
+                <option value="normal" selected>⚔️ 普通棋士</option>
+                <option value="master">👑 大師宗師</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-1 gap-2">
+              <button id="btn-create-room" class="gold-btn w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-1.5">
+                <span>🌐</span><span>建立線上 P2P 房間</span>
+              </button>
+              <div class="grid grid-cols-2 gap-2">
+                <button id="btn-quick-ai" class="wood-btn py-2 rounded-xl text-xs sm:text-sm font-bold">🤖 單人對戰 AI</button>
+                <button id="btn-quick-local" class="wood-btn py-2 rounded-xl text-xs sm:text-sm font-bold">👥 本機雙人同屏</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Join Friend Room -->
+          <div class="wood-panel rounded-2xl p-3 sm:p-4 compact-pad flex flex-col justify-between gap-2.5">
+            <div>
+              <h3 class="text-sm sm:text-base font-black text-amber-300 flex items-center gap-1.5">
+                <span>🤝</span><span>加入好友房間</span>
+              </h3>
+              <p class="text-[11px] sm:text-xs text-amber-100/70 mt-0.5 hide-on-short-landscape">
+                輸入 5 碼房間號或直接點擊好友分享的邀請連結（自動帶入房號）。
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-2">
+              <input id="input-room-code" type="text" maxlength="8" placeholder="輸入房號 (例如: A7K92)" class="w-full px-3 py-2.5 rounded-xl bg-black/45 border border-amber-400/35 text-amber-100 text-center font-mono text-base tracking-widest uppercase focus:outline-none focus:border-amber-300" />
+              <button id="btn-join-room" class="gold-btn w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-1.5">
+                <span>🚪</span><span>立即加入房間</span>
+              </button>
+            </div>
+
+            <div class="text-[11px] text-amber-200/70 flex items-center justify-between border-t border-amber-500/20 pt-1.5">
+              <span id="p2p-status-hint">P2P 連線引擎就緒</span>
+              <button id="btn-open-rules" class="underline text-amber-300 hover:text-amber-200">📖 查看規則</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ==================== VIEW 2: WAITING ROOM ==================== -->
+    <section id="view-waiting" class="hidden flex-1 overflow-y-auto px-3 py-2 sm:py-4 flex flex-col items-center justify-center">
+      <div class="w-full max-w-4xl wood-panel rounded-2xl p-3 sm:p-5 compact-pad flex flex-col gap-3">
+        <!-- Waiting Header -->
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/25 pb-2">
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs font-bold" id="wait-mode-badge">傳統大盤象棋</span>
+            <span class="text-sm sm:text-base font-black text-amber-100">房號：<span id="wait-room-code" class="font-mono text-amber-300 tracking-widest">-----</span></span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btn-copy-invite" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs font-bold">📋 複製邀請網址</button>
+            <button id="btn-leave-waiting" class="px-2.5 py-1.5 rounded-lg bg-rose-900/70 hover:bg-rose-800 border border-rose-400/40 text-rose-100 text-xs font-bold">離開房間</button>
+          </div>
+        </div>
+
+        <!-- Waiting Body: Two Columns on Desktop & Landscape -->
+        <div id="waiting-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+          <!-- Left: Seats & Controls -->
+          <div class="flex flex-col gap-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-amber-200">對戰座位 (2人滿桌)</span>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[11px] text-amber-200/75">批次 AI：</span>
+                <select id="wait-batch-ai" class="px-2 py-1 rounded-lg bg-black/50 border border-amber-400/35 text-xs text-amber-100">
+                  <option value="novice">放水新手</option>
+                  <option value="normal" selected>普通棋士</option>
+                  <option value="master">大師宗師</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Seat Cards -->
+            <div id="wait-seats-list" class="flex flex-col gap-2"></div>
+
+            <!-- Voice Bar -->
+            <div class="flex items-center justify-between gap-2 bg-black/35 rounded-xl p-2 border border-amber-500/20">
+              <div class="flex items-center gap-1.5">
+                <button id="btn-wait-mic" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs font-bold">🎙️ 開啟麥克風</button>
+                <button id="btn-wait-speaker" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs font-bold">🔊 喇叭已開</button>
+              </div>
+              <span id="wait-voice-status" class="text-[11px] text-amber-200/75">語音待機中</span>
+            </div>
+
+            <!-- Host Start Actions -->
+            <div id="wait-host-actions" class="flex flex-col gap-2 mt-1">
+              <div class="grid grid-cols-2 gap-2">
+                <select id="wait-switch-mode" class="px-2.5 py-2 rounded-xl bg-black/50 border border-amber-400/35 text-xs text-amber-100">
+                  <option value="traditional">🏯 傳統大盤 (9×10)</option>
+                  <option value="dark">🎴 台灣暗棋 (4×8)</option>
+                </select>
+                <select id="wait-switch-format" class="px-2.5 py-2 rounded-xl bg-black/50 border border-amber-400/35 text-xs text-amber-100">
+                  <option value="BO1">單局決勝 (BO1)</option>
+                  <option value="BO3">三戰兩勝 (BO3)</option>
+                </select>
+              </div>
+              <button id="btn-start-match" class="gold-btn w-full py-2.5 rounded-xl text-sm">⚔️ 開始對弈（空位自動 AI 補滿）</button>
+            </div>
+            <div id="wait-guest-hint" class="hidden text-center text-xs text-amber-200/80 py-2 bg-black/30 rounded-xl border border-amber-500/20">
+              ⏳ 等待房主開始對局...
+            </div>
+          </div>
+
+          <!-- Right: QR Code & Invite Link -->
+          <div class="flex flex-col items-center justify-center bg-black/30 rounded-2xl p-3 border border-amber-500/20 gap-2">
+            <div id="qrcode-box" class="bg-white p-2 rounded-xl shadow-lg"></div>
+            <p class="text-[11px] text-amber-100/80 text-center">掃描 QR Code 或分享連結直接加入</p>
+            <div id="wait-invite-url" class="w-full text-[10px] font-mono text-amber-300/90 bg-black/50 px-2.5 py-1.5 rounded-lg truncate text-center border border-amber-500/20"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 3: GAME STAGE ==================== -->
+    <section id="view-game" class="hidden flex-1 overflow-hidden flex flex-col">
+      <div id="game-stage" class="flex-1 w-full h-full flex flex-col items-center justify-between px-2 py-1.5 sm:px-4 sm:py-2 overflow-hidden gap-1.5">
+
+        <!-- TOP / LEFT HUD: Opponent Card & Turn Banner -->
+        <div class="side-hud-col w-full max-w-xl flex flex-row items-center justify-between gap-2 shrink-0">
+          <!-- Opponent Player Card -->
+          <div id="hud-top-player" class="wood-panel rounded-xl px-2.5 py-1.5 flex-1 flex items-center justify-between gap-2 compact-pad">
+            <div class="flex items-center gap-2 min-w-0">
+              <div id="hud-top-badge" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-black text-sm border-2 shrink-0 bg-stone-900 text-stone-100 border-stone-400">將</div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-1">
+                  <span id="hud-top-name" class="text-xs sm:text-sm font-bold text-amber-100 truncate">電腦大師</span>
+                  <span id="hud-top-tag" class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-200 shrink-0">AI</span>
+                </div>
+                <div class="text-[10px] text-amber-200/75 flex items-center gap-2">
+                  <span id="hud-top-wins">勝場: 0</span>
+                  <span id="hud-top-captured-count">吃子: 0</span>
+                </div>
+              </div>
+            </div>
+            <!-- Captured Pieces Mini Strip -->
+            <div id="hud-top-captured" class="hidden sm:flex flex-wrap justify-end gap-0.5 max-w-[92px] text-[11px]"></div>
+          </div>
+
+          <!-- Anti-Jitter Fixed-Size Turn & Timer Status Box (Uses animate-pulse only, NEVER animate-ping) -->
+          <div class="wood-panel rounded-xl px-2.5 py-1.5 flex flex-col items-center justify-center shrink-0 w-[112px] sm:w-[136px] h-[52px] sm:h-[58px]">
+            <div id="turn-indicator" class="text-xs sm:text-sm font-black tracking-wide text-amber-300 animate-pulse truncate w-full text-center">紅方回合</div>
+            <div class="flex items-center justify-center gap-1.5 text-[10px] text-amber-100/80 mt-0.5 w-full">
+              <span id="match-score-badge" class="font-mono font-bold text-amber-200">0 : 0</span>
+              <span>|</span>
+              <span id="turn-timer" class="font-mono font-bold w-7 text-center">60s</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CENTER: ADAPTIVE CHESS BOARD -->
+        <div id="board-wrapper" class="flex-1 min-h-0 w-full flex items-center justify-center relative">
+          <!-- Traditional 9x10 Board -->
+          <div id="traditional-board-container" class="xiangqi-board-frame relative hidden">
+            <svg id="traditional-board-svg" class="w-full h-full block" viewBox="0 0 450 500" preserveAspectRatio="xMidYMid meet"></svg>
+            <div id="traditional-pieces-layer" class="absolute inset-0"></div>
+          </div>
+
+          <!-- Taiwanese Dark Chess 4x8 Board -->
+          <div id="dark-board-container" class="xiangqi-board-frame relative hidden p-2 sm:p-3">
+            <div id="dark-board-grid" class="w-full h-full grid gap-0 border-2 border-[#4a2d13] bg-[#dfb778]/70"></div>
+          </div>
+
+          <!-- Check / Special Floating Banner (Fixed position, non-layout-shifting) -->
+          <div id="board-alert-banner" class="hidden pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 px-6 py-2 rounded-2xl bg-red-900/90 border-2 border-amber-300 text-amber-200 text-2xl sm:text-4xl font-black tracking-widest shadow-2xl">
+            將 軍 ！
+          </div>
+        </div>
+
+        <!-- BOTTOM / RIGHT HUD: Self Player Card & Action Controls -->
+        <div class="side-hud-col w-full max-w-xl flex flex-col gap-1.5 shrink-0">
+          <!-- Self Player Card -->
+          <div id="hud-bottom-player" class="wood-panel rounded-xl px-2.5 py-1.5 flex items-center justify-between gap-2 compact-pad">
+            <div class="flex items-center gap-2 min-w-0">
+              <div id="hud-bottom-badge" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-black text-sm border-2 shrink-0 bg-red-800 text-amber-100 border-amber-300">帥</div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-1">
+                  <span id="hud-bottom-name" class="text-xs sm:text-sm font-bold text-amber-100 truncate">紅方棋士</span>
+                  <span id="hud-bottom-tag" class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/25 text-emerald-200 shrink-0">你</span>
+                </div>
+                <div class="text-[10px] text-amber-200/75 flex items-center gap-2">
+                  <span id="hud-bottom-wins">勝場: 0</span>
+                  <span id="hud-bottom-captured-count">吃子: 0</span>
+                </div>
+              </div>
+            </div>
+            <div id="hud-bottom-captured" class="hidden sm:flex flex-wrap justify-end gap-0.5 max-w-[92px] text-[11px]"></div>
+          </div>
+
+          <!-- Compact Control Bar -->
+          <div class="flex flex-wrap items-center justify-center gap-1.5">
+            <button id="btn-end-chain" class="hidden gold-btn px-2.5 py-1.5 rounded-lg text-xs">✅ 結束連吃</button>
+            <button id="btn-undo" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs font-bold compact-text">↩️ 悔棋</button>
+            <button id="btn-offer-draw" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs font-bold compact-text">🤝 提和</button>
+            <button id="btn-resign" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs font-bold compact-text text-rose-200">🏳️ 認輸</button>
+            <button id="btn-sync-nudge" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs font-bold compact-text">🔄 同步</button>
+            <button id="btn-game-mic" class="wood-btn px-2 py-1.5 rounded-lg text-xs font-bold compact-text" title="麥克風">🎙️</button>
+            <button id="btn-exit-game" class="wood-btn px-2 py-1.5 rounded-lg text-xs font-bold compact-text" title="返回大廳">🚪</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ==================== MODAL 1: STICKY FOOTER SETTLEMENT ==================== -->
+  <div id="modal-settlement" class="hidden fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3">
+    <div class="wood-panel w-full max-w-lg max-h-[92dvh] rounded-2xl flex flex-col overflow-hidden">
+      <!-- Fixed Header -->
+      <div class="shrink-0 px-4 py-3 border-b border-amber-500/30 bg-black/35 flex items-center justify-between">
+        <h3 id="settle-title" class="text-lg sm:text-xl font-black text-amber-300">🏆 紅方獲勝！</h3>
+        <span id="settle-mode-tag" class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-200 border border-amber-400/30">傳統大盤</span>
+      </div>
+      <!-- Scrollable Body -->
+      <div id="settle-body" class="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="bg-black/35 rounded-xl p-3 border border-amber-500/20 text-center">
+            <div class="text-xs text-amber-200/75">勝負原因</div>
+            <div id="settle-reason" class="text-base font-black text-amber-100 mt-0.5">絕殺將死</div>
+          </div>
+          <div class="bg-black/35 rounded-xl p-3 border border-amber-500/20 text-center">
+            <div class="text-xs text-amber-200/75">系列賽大比分</div>
+            <div id="settle-series-score" class="text-base font-black text-amber-300 mt-0.5">1 : 0</div>
+          </div>
+        </div>
+        <div class="bg-black/30 rounded-xl p-3 border border-amber-500/20 space-y-2">
+          <div class="flex justify-between text-xs"><span class="text-amber-200/75">總回合數</span><span id="settle-turns" class="font-mono font-bold">0 步</span></div>
+          <div class="flex justify-between text-xs"><span class="text-amber-200/75">紅方吃子戰果</span><span id="settle-red-cap" class="font-bold text-red-300">0 子</span></div>
+          <div class="flex justify-between text-xs"><span class="text-amber-200/75">黑方吃子戰果</span><span id="settle-black-cap" class="font-bold text-stone-300">0 子</span></div>
+        </div>
+        <div id="settle-captured-detail" class="bg-black/25 rounded-xl p-3 border border-amber-500/15 text-xs text-amber-100/85 leading-relaxed"></div>
+      </div>
+      <!-- Fixed Sticky Footer -->
+      <div class="shrink-0 px-4 py-3 border-t border-amber-500/30 bg-black/45 flex items-center justify-end gap-2">
+        <button id="btn-settle-lobby" class="wood-btn px-4 py-2 rounded-xl text-sm font-bold">返回大廳</button>
+        <button id="btn-settle-next" class="gold-btn px-5 py-2 rounded-xl text-sm">再來一局</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 2: CHAMPION VICTORY REWARD ==================== -->
+  <div id="modal-champion" class="hidden fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
+    <div class="wood-panel w-full max-w-2xl max-h-[92dvh] rounded-2xl flex flex-col overflow-hidden border-2 border-amber-400/70">
+      <div class="shrink-0 px-4 py-3 border-b border-amber-400/40 bg-gradient-to-r from-amber-900/60 via-amber-700/40 to-amber-900/60 flex items-center justify-between">
+        <h3 class="text-lg sm:text-xl font-black text-amber-200">👑 終局總冠軍榮耀殿堂</h3>
+        <span id="champ-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-amber-400 text-stone-950 font-black">棋聖認證</span>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-4">
+        <p id="champ-subtitle" class="text-center text-sm text-amber-100 font-bold"></p>
+
+        <!-- Certificate Section -->
+        <div id="champ-cert-section" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-300">📜 專屬冠軍獎狀</span>
+            <button id="btn-download-cert" class="gold-btn px-3 py-1 rounded-lg text-xs">📥 下載獎狀圖檔 (PNG)</button>
+          </div>
+          <div class="w-full rounded-xl overflow-hidden border border-amber-400/50 bg-black/40 shadow-xl">
+            <canvas id="champion-cert-canvas" width="1200" height="820" class="w-full h-auto block"></canvas>
+          </div>
+        </div>
+
+        <!-- Hidden Image Reward Section -->
+        <div id="champ-hidden-section" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-300">🎁 隱藏冠軍獎勵圖檔（已解鎖）</span>
+            <button id="btn-download-hidden" class="wood-btn px-3 py-1 rounded-lg text-xs font-bold">📥 下載隱藏圖檔</button>
+          </div>
+          <div class="w-full rounded-xl overflow-hidden border border-amber-400/50 bg-black/40 flex items-center justify-center p-2 cursor-zoom-in" id="champ-hidden-preview-box">
+            <img id="champ-hidden-img" alt="冠軍隱藏獎勵圖檔" class="max-h-72 w-auto rounded-lg object-contain shadow-lg" />
+          </div>
+          <p class="text-[11px] text-amber-200/70 text-center">點擊隱藏圖檔可放大檢視</p>
+        </div>
+      </div>
+      <div class="shrink-0 px-4 py-3 border-t border-amber-500/30 bg-black/50 flex items-center justify-end gap-2">
+        <button id="btn-champ-close" class="gold-btn px-6 py-2 rounded-xl text-sm">收下榮耀並確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightbox for Hidden Reward Zoom -->
+  <div id="modal-lightbox" class="hidden fixed inset-0 z-[115] bg-black/95 flex items-center justify-center p-4 cursor-zoom-out">
+    <img id="lightbox-img" alt="放大檢視" class="max-w-full max-h-full rounded-xl shadow-2xl object-contain" />
+  </div>
+
+  <!-- ==================== MODAL 3: SETTINGS (Audio, Voice, Wallpaper, Reward) ==================== -->
+  <div id="modal-settings" class="hidden fixed inset-0 z-[95] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3">
+    <div class="wood-panel w-full max-w-xl max-h-[92dvh] rounded-2xl flex flex-col overflow-hidden">
+      <div class="shrink-0 px-4 py-3 border-b border-amber-500/30 bg-black/35 flex items-center justify-between">
+        <h3 class="text-base sm:text-lg font-black text-amber-300">⚙️ 系統、音效、桌布與獎勵設定</h3>
+        <button id="btn-close-settings-x" class="text-amber-200 hover:text-white text-lg px-2">✕</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-4 text-xs sm:text-sm">
+        <!-- Audio & BGM -->
+        <div class="bg-black/30 rounded-xl p-3 border border-amber-500/20 space-y-2.5">
+          <h4 class="font-black text-amber-200">🎵 音效、語音播報與背景音樂</h4>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 cursor-pointer"><input id="set-sfx" type="checkbox" checked class="accent-amber-400" /> 木質落子與吃子音效</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input id="set-tts" type="checkbox" checked class="accent-amber-400" /> 繁體中文語音播報</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input id="set-bgm" type="checkbox" class="accent-amber-400" /> 古風五聲音階 BGM</label>
+            <label class="flex items-center gap-2 cursor-pointer"><input id="set-mute-all" type="checkbox" class="accent-amber-400" /> 全部靜音</label>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-20 shrink-0 text-amber-200/80">音樂音量</span>
+            <input id="set-bgm-vol" type="range" min="0" max="100" value="40" class="flex-1 accent-amber-400" />
+            <span id="val-bgm-vol" class="w-9 text-right font-mono">40%</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="wood-btn px-3 py-1.5 rounded-lg text-xs cursor-pointer">
+              📁 匯入本機音樂 (MP3/WAV/OGG)
+              <input id="input-custom-bgm" type="file" accept="audio/*" class="hidden" />
+            </label>
+            <button id="btn-reset-bgm" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs">恢復內建五聲音階</button>
+          </div>
+        </div>
+
+        <!-- WebRTC Voice Controls -->
+        <div class="bg-black/30 rounded-xl p-3 border border-amber-500/20 space-y-2.5">
+          <h4 class="font-black text-amber-200">🎙️ 雙向語音通話增益控制</h4>
+          <div class="flex items-center gap-2">
+            <span class="w-20 shrink-0 text-amber-200/80">麥克風增益</span>
+            <input id="set-mic-gain" type="range" min="0" max="200" value="100" class="flex-1 accent-amber-400" />
+            <span id="val-mic-gain" class="w-10 text-right font-mono">100%</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-20 shrink-0 text-amber-200/80">遠端喇叭</span>
+            <input id="set-spk-gain" type="range" min="50" max="300" value="120" class="flex-1 accent-amber-400" />
+            <span id="val-spk-gain" class="w-10 text-right font-mono">120%</span>
+          </div>
+        </div>
+
+        <!-- WallpaperManager -->
+        <div class="bg-black/30 rounded-xl p-3 border border-amber-500/20 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h4 class="font-black text-amber-200">🖼️ 背景桌布與直橫式智慧分流</h4>
+            <label class="flex items-center gap-1.5 cursor-pointer text-xs"><input id="set-wp-enabled" type="checkbox" checked class="accent-amber-400" /> 啟用桌布</label>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <select id="set-wp-mode" class="px-2 py-1.5 rounded-lg bg-black/50 border border-amber-400/35 text-xs">
+              <option value="slideshow">定時自動輪播</option>
+              <option value="single">單張固定顯示</option>
+            </select>
+            <button id="btn-wp-next" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs">⏭️ 切換下一張</button>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-20 shrink-0 text-amber-200/80">輪播間隔</span>
+            <input id="set-wp-interval" type="range" min="5" max="60" value="15" class="flex-1 accent-amber-400" />
+            <span id="val-wp-interval" class="w-9 text-right font-mono">15s</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-20 shrink-0 text-amber-200/80">遮罩暗度</span>
+            <input id="set-wp-dim" type="range" min="0" max="90" value="58" class="flex-1 accent-amber-400" />
+            <span id="val-wp-dim" class="w-9 text-right font-mono">58%</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-20 shrink-0 text-amber-200/80">背景模糊</span>
+            <input id="set-wp-blur" type="range" min="0" max="20" value="0" class="flex-1 accent-amber-400" />
+            <span id="val-wp-blur" class="w-9 text-right font-mono">0px</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <input id="set-gh-owner" type="text" placeholder="GitHub Owner (選填)" class="px-2 py-1.5 rounded-lg bg-black/45 border border-amber-400/30 text-xs" />
+            <input id="set-gh-repo" type="text" placeholder="GitHub Repo (選填)" class="px-2 py-1.5 rounded-lg bg-black/45 border border-amber-400/30 text-xs" />
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="wood-btn px-2.5 py-1.5 rounded-lg text-xs cursor-pointer">
+              📁 自行上傳桌布圖片
+              <input id="input-wp-upload" type="file" accept="image/*" multiple class="hidden" />
+            </label>
+            <button id="btn-wp-reload-gh" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs">🔄 掃描 GitHub 資料夾</button>
+            <button id="btn-wp-clear-custom" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs">恢復預設 / 清除自訂</button>
+          </div>
+          <div id="wp-status-text" class="text-[11px] text-amber-200/75">目前使用古風深胡桃木預設漸層背景</div>
+        </div>
+
+        <!-- Victory Reward Settings -->
+        <div class="bg-black/30 rounded-xl p-3 border border-amber-500/20 space-y-2.5">
+          <h4 class="font-black text-amber-200">🏆 終局冠軍獎勵指派設定</h4>
+          <div class="flex items-center gap-2">
+            <span class="w-20 shrink-0 text-amber-200/80">獎勵模式</span>
+            <select id="set-reward-mode" class="flex-1 px-2 py-1.5 rounded-lg bg-black/50 border border-amber-400/35 text-xs">
+              <option value="both">雙重獎勵（獎狀 ＋ 隱藏圖檔）</option>
+              <option value="certificate">僅顯示專業冠軍獎狀</option>
+              <option value="hiddenImage">僅顯示解鎖隱藏圖檔</option>
+            </select>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="wood-btn px-2.5 py-1.5 rounded-lg text-xs cursor-pointer">
+              🎁 上傳自訂隱藏獎勵圖檔
+              <input id="input-hidden-reward" type="file" accept="image/*" class="hidden" />
+            </label>
+            <button id="btn-test-reward" class="wood-btn px-2.5 py-1.5 rounded-lg text-xs">👀 預覽冠軍獎勵視窗</button>
+          </div>
+        </div>
+      </div>
+      <div class="shrink-0 px-4 py-3 border-t border-amber-500/30 bg-black/45 flex justify-end">
+        <button id="btn-close-settings" class="gold-btn px-6 py-2 rounded-xl text-sm">確定套用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 4: CUSTOM CONFIRM / DRAW OFFER / APPROVAL ==================== -->
+  <div id="modal-confirm" class="hidden fixed inset-0 z-[110] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3">
+    <div class="wood-panel w-full max-w-sm max-h-[92dvh] rounded-2xl flex flex-col overflow-hidden">
+      <div class="shrink-0 px-4 py-3 border-b border-amber-500/30 bg-black/35">
+        <h3 id="confirm-title" class="text-base font-black text-amber-300">確認操作</h3>
+      </div>
+      <div id="confirm-body" class="flex-1 overflow-y-auto p-4 text-sm text-amber-100 leading-relaxed"></div>
+      <div class="shrink-0 px-4 py-3 border-t border-amber-500/30 bg-black/45 flex justify-end gap-2">
+        <button id="btn-confirm-cancel" class="wood-btn px-4 py-1.5 rounded-xl text-xs font-bold">取消</button>
+        <button id="btn-confirm-ok" class="gold-btn px-4 py-1.5 rounded-xl text-xs">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 5: RULES GUIDE ==================== -->
+  <div id="modal-rules" class="hidden fixed inset-0 z-[96] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3">
+    <div class="wood-panel w-full max-w-lg max-h-[92dvh] rounded-2xl flex flex-col overflow-hidden">
+      <div class="shrink-0 px-4 py-3 border-b border-amber-500/30 bg-black/35 flex items-center justify-between">
+        <h3 class="text-base font-black text-amber-300">📖 雙模式象棋完整規則</h3>
+        <button id="btn-close-rules-x" class="text-amber-200 px-2">✕</button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4 space-y-3 text-xs sm:text-sm text-amber-100/90 leading-relaxed">
+        <div>
+          <h4 class="font-black text-amber-300 mb-1">🏯 模式 A：傳統大盤象棋 (9×10)</h4>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>紅先黑後，雙方各 16 子。帥／將限九宮格直橫走 1 步，且嚴格執行「王不見王」。</li>
+            <li>仕／士限九宮格斜走；相／象走「田」字不過河（塞象眼禁走）；俥／車直橫無阻；傌／馬走「日」字（拐馬腳禁走）。</li>
+            <li>炮／包移動同車，吃子必須恰好隔著 1 枚棋子（炮架）。兵／卒過河前直進，過河後可前左右直走不可後退。</li>
+            <li>將死或困斃（無合法步）獲勝；禁止主動送將。</li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="font-black text-amber-300 mb-1">🎴 模式 B：台灣暗棋 (4×8 半盤)</h4>
+          <ul class="list-disc pl-5 space-y-1">
+            <li>32 枚棋子洗牌蓋滿 4×8 棋格，先手翻開第一枚棋子決定雙方陣營顏色。</li>
+            <li>每回合三選一：翻開暗棋、明棋上下左右移 1 格空格、或吃對方明棋。</li>
+            <li>大小順序：<b>帥/將(7) &gt; 仕/士(6) &gt; 相/象(5) &gt; 俥/車(4) &gt; 傌/馬(3) &gt; 炮/包(2) &gt; 兵/卒(1)</b>，大吃小、同級平吃；<b>兵／卒可吃將／帥，但將／帥不可吃兵／卒</b>。</li>
+            <li><b>台灣炮／包規則</b>：移動走 1 格空格；吃子須同直行或橫列恰好隔 1 子（明暗敵我皆可）跳吃對方任意等級明棋（不可吃相鄰格）。</li>
+            <li>吃光對方棋子或對方無合法步判勝；連續 50 步無翻棋且無吃子自動判和。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="shrink-0 px-4 py-3 border-t border-amber-500/30 bg-black/45 flex justify-end">
+        <button id="btn-close-rules" class="gold-btn px-5 py-1.5 rounded-xl text-sm">我知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT CORE ==================== -->
+  <script>
+  (() => {
+    'use strict';
+
+    /* =========================================================================
+       [遊戲開發區] GAME_CONFIG — 通用多人連線遊戲系統核心設定
+       ========================================================================= */
+    const GAME_CONFIG = {
+      gameName: '雙模式中國象棋：傳統大盤 × 台灣暗棋',
+      shortName: '雙模式中國象棋',
+      peerPrefix: 'XIANGQI-',
+      maxPlayers: 2,
+      heartbeatMs: 3000,
+      heartbeatTimeoutMs: 9000,
+      turnSeconds: 60,
+      wallpaperFolder: 'wallpapers',
+      victoryReward: {
+        mode: 'both', // 'certificate' | 'hiddenImage' | 'both'
+        hiddenImageUrl: './rewards/xiangqi_champion_secret.png',
+        customHiddenDataUrl: null
+      }
+    };
+
+    /* =========================================================================
+       UTILITIES: Toast, Modal Confirm, DOM Helpers
+       ========================================================================= */
+    const $ = (id) => document.getElementById(id);
+
+    function showToast(msg, type = 'info', duration = 2800) {
+      const container = $('toast-container');
+      const el = document.createElement('div');
+      const colors = {
+        info: 'bg-stone-900/95 border-amber-400/60 text-amber-100',
+        success: 'bg-emerald-950/95 border-emerald-400/70 text-emerald-100',
+        warn: 'bg-amber-950/95 border-amber-400 text-amber-100',
+        error: 'bg-rose-950/95 border-rose-400 text-rose-100'
+      };
+      el.className = `px-4 py-2 rounded-xl border text-xs sm:text-sm font-bold shadow-2xl backdrop-blur-md transition-all duration-300 ${colors[type] || colors.info}`;
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(-8px)';
+        setTimeout(() => el.remove(), 300);
+      }, duration);
+    }
+
+    let confirmResolve = null;
+    function showConfirmModal(title, htmlContent, okText = '確定', cancelText = '取消') {
+      return new Promise((resolve) => {
+        confirmResolve = resolve;
+        $('confirm-title').textContent = title;
+        $('confirm-body').innerHTML = htmlContent;
+        $('btn-confirm-ok').textContent = okText;
+        $('btn-confirm-cancel').textContent = cancelText;
+        $('btn-confirm-cancel').style.display = cancelText ? '' : 'none';
+        $('modal-confirm').classList.remove('hidden');
+      });
+    }
+    $('btn-confirm-ok').addEventListener('click', () => {
+      $('modal-confirm').classList.add('hidden');
+      if (confirmResolve) { const r = confirmResolve; confirmResolve = null; r(true); }
+    });
+    $('btn-confirm-cancel').addEventListener('click', () => {
+      $('modal-confirm').classList.add('hidden');
+      if (confirmResolve) { const r = confirmResolve; confirmResolve = null; r(false); }
+    });
+
+    function copyTextFallback(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('已複製邀請網址到剪貼簿！', 'success');
+      } catch (e) {
+        showToast('無法自動複製，請手動複製網址', 'warn');
+      }
+      ta.remove();
+    }
+
+    function genRoomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let out = '';
+      for (let i = 0; i < 5; i++) out += chars[Math.floor(Math.random() * chars.length)];
+      return out;
+    }
+
+    /* =========================================================================
+       SCREEN WAKE LOCK & FULLSCREEN MANAGER
+       ========================================================================= */
+    const ScreenWakeLockManager = {
+      wakeLock: null,
+      active: false,
+      keepAliveOsc: null,
+      async toggle() {
+        if (this.active) {
+          this.release();
+        } else {
+          await this.acquire();
+        }
+      },
+      async acquire() {
+        try {
+          if ('wakeLock' in navigator) {
+            this.wakeLock = await navigator.wakeLock.request('screen');
+            this.wakeLock.addEventListener('release', () => {
+              if (this.active) this.updateBtn(false);
+            });
+          } else {
+            this.startSilentKeepAlive();
+          }
+          this.active = true;
+          this.updateBtn(true);
+          showToast('已開啟螢幕恆亮防休眠', 'success');
+        } catch (err) {
+          this.startSilentKeepAlive();
+          this.active = true;
+          this.updateBtn(true);
+          showToast('已啟用無聲保活防休眠模式', 'info');
+        }
+      },
+      release() {
+        if (this.wakeLock) {
+          this.wakeLock.release().catch(() => {});
+          this.wakeLock = null;
+        }
+        if (this.keepAliveOsc) {
+          try { this.keepAliveOsc.stop(); } catch (e) {}
+          this.keepAliveOsc = null;
+        }
+        this.active = false;
+        this.updateBtn(false);
+        showToast('已關閉螢幕恆亮', 'info');
+      },
+      startSilentKeepAlive() {
+        try {
+          const ctx = AudioMediaEngine.ensureCtx();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          gain.gain.value = 0.0001;
+          osc.frequency.value = 1;
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start();
+          this.keepAliveOsc = osc;
+        } catch (e) {}
+      },
+      updateBtn(on) {
+        const btn = $('btn-wake-lock');
+        btn.classList.toggle('border-amber-300', on);
+        btn.classList.toggle('text-amber-300', on);
+      }
+    };
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {
+          showToast('此瀏覽器不支援一鍵全螢幕，可使用「加入主畫面」', 'warn');
+        });
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    }
+
+    /* =========================================================================
+       AUDIO & MEDIA ENGINE (SFX + zh-TW TTS + Pentatonic BGM + Custom Import)
+       ========================================================================= */
+    const AudioMediaEngine = {
+      ctx: null,
+      sfxEnabled: true,
+      ttsEnabled: true,
+      bgmEnabled: false,
+      muted: false,
+      bgmVolume: 0.4,
+      bgmTimer: null,
+      bgmStep: 0,
+      customAudio: null,
+      customAudioUrl: null,
+
+      ensureCtx() {
+        if (!this.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AC();
+        }
+        if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+        return this.ctx;
+      },
+
+      playWoodMove() {
+        if (this.muted || !this.sfxEnabled) return;
+        try {
+          const ctx = this.ensureCtx();
+          const now = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(220, now);
+          osc.frequency.exponentialRampToValueAtTime(75, now + 0.08);
+          gain.gain.setValueAtTime(0.45, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        } catch (e) {}
+      },
+
+      playCapture() {
+        if (this.muted || !this.sfxEnabled) return;
+        try {
+          const ctx = this.ensureCtx();
+          const now = ctx.currentTime;
+          // Crisp dual impact sound
+          [320, 150].forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = idx === 0 ? 'sawtooth' : 'triangle';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.02);
+            osc.frequency.exponentialRampToValueAtTime(55, now + 0.14);
+            gain.gain.setValueAtTime(idx === 0 ? 0.25 : 0.45, now + idx * 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + idx * 0.02);
+            osc.stop(now + 0.17);
+          });
+        } catch (e) {}
+      },
+
+      playFlip() {
+        if (this.muted || !this.sfxEnabled) return;
+        try {
+          const ctx = this.ensureCtx();
+          const now = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(380, now);
+          osc.frequency.exponentialRampToValueAtTime(620, now + 0.07);
+          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.1);
+        } catch (e) {}
+      },
+
+      playCheckAlert() {
+        if (this.muted || !this.sfxEnabled) return;
+        try {
+          const ctx = this.ensureCtx();
+          const now = ctx.currentTime;
+          [523.25, 659.25, 783.99].forEach((f, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(f, now + i * 0.08);
+            gain.gain.setValueAtTime(0.22, now + i * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.28);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + i * 0.08);
+            osc.stop(now + i * 0.08 + 0.3);
+          });
+        } catch (e) {}
+      },
+
+      playVictoryFanfare() {
+        if (this.muted || !this.sfxEnabled) return;
+        try {
+          const ctx = this.ensureCtx();
+          const now = ctx.currentTime;
+          const notes = [523.25, 587.33, 659.25, 783.99, 1046.5];
+          notes.forEach((f, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(f, now + i * 0.11);
+            gain.gain.setValueAtTime(0.25, now + i * 0.11);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.11 + 0.45);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + i * 0.11);
+            osc.stop(now + i * 0.11 + 0.48);
+          });
+        } catch (e) {}
+      },
+
+      speak(text, isSelfAction = false) {
+        if (this.muted || !this.ttsEnabled) return;
+        // Suppress self announcement when user's mic is live to avoid echo
+        if (isSelfAction && VoiceChatEngine.micActive) return;
+        if (!('speechSynthesis' in window)) return;
+        try {
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = 'zh-TW';
+          u.rate = 1.08;
+          u.volume = 0.88;
+          window.speechSynthesis.speak(u);
+        } catch (e) {}
+      },
+
+      startBgm() {
+        this.stopBgm();
+        if (this.muted || !this.bgmEnabled) return;
+        if (this.customAudio) {
+          this.customAudio.volume = this.bgmVolume;
+          this.customAudio.loop = true;
+          this.customAudio.play().catch(() => {});
+          return;
+        }
+        // Built-in Pentatonic Guzheng-style Synth Loop (C D E G A)
+        const scale = [261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25];
+        const melody = [0, 2, 3, 5, 4, 3, 2, 1, 0, 3, 4, 6, 5, 4, 3, 2];
+        this.bgmTimer = setInterval(() => {
+          if (this.muted || !this.bgmEnabled) return;
+          try {
+            const ctx = this.ensureCtx();
+            const now = ctx.currentTime;
+            const freq = scale[melody[this.bgmStep % melody.length]];
+            this.bgmStep++;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now);
+            gain.gain.setValueAtTime(this.bgmVolume * 0.18, now);
+            gain.gain.exponentialRampToValueAtTime(0.0008, now + 1.25);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now);
+            osc.stop(now + 1.3);
+          } catch (e) {}
+        }, 900);
+      },
+
+      stopBgm() {
+        if (this.bgmTimer) {
+          clearInterval(this.bgmTimer);
+          this.bgmTimer = null;
+        }
+        if (this.customAudio) {
+          this.customAudio.pause();
+        }
+      },
+
+      loadCustomAudio(file) {
+        if (this.customAudioUrl) URL.revokeObjectURL(this.customAudioUrl);
+        this.customAudioUrl = URL.createObjectURL(file);
+        this.customAudio = new Audio(this.customAudioUrl);
+        this.customAudio.loop = true;
+        this.customAudio.volume = this.bgmVolume;
+        this.bgmEnabled = true;
+        $('set-bgm').checked = true;
+        this.startBgm();
+        showToast(`已載入背景音樂：${file.name}`, 'success');
+      },
+
+      resetDefaultBgm() {
+        if (this.customAudio) {
+          this.customAudio.pause();
+          this.customAudio = null;
+        }
+        if (this.bgmEnabled) this.startBgm();
+        showToast('已恢復內建古風五聲音階配樂', 'info');
+      }
+    };
+
+    /* =========================================================================
+       WEBRTC VOICE CHAT ENGINE (Mic Gain 0-200%, Remote Compressor + Gain 50-300%)
+       ========================================================================= */
+    const VoiceChatEngine = {
+      localStream: null,
+      processedStream: null,
+      micActive: false,
+      speakerOn: true,
+      micGainValue: 1.0,
+      speakerGainValue: 1.2,
+      micGainNode: null,
+      remoteGainNodes: [],
+      calls: [],
+
+      async toggleMic() {
+        if (this.micActive) {
+          this.stopMic();
+          return;
+        }
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          this.localStream = stream;
+          const ctx = AudioMediaEngine.ensureCtx();
+          const src = ctx.createMediaStreamSource(stream);
+          const gain = ctx.createGain();
+          gain.gain.value = this.micGainValue;
+          const dest = ctx.createMediaStreamDestination();
+          src.connect(gain);
+          gain.connect(dest);
+          this.micGainNode = gain;
+          this.processedStream = dest.stream;
+          this.micActive = true;
+          this.updateUI();
+          showToast('麥克風已開啟', 'success');
+          NetworkEngine.callPeersWithVoice();
+        } catch (err) {
+          showToast('無法取得麥克風權限（請確認瀏覽器設定）', 'warn');
+        }
+      },
+
+      stopMic() {
+        if (this.localStream) {
+          this.localStream.getTracks().forEach((t) => t.stop());
+          this.localStream = null;
+        }
+        this.processedStream = null;
+        this.micActive = false;
+        this.updateUI();
+        showToast('麥克風已關閉', 'info');
+      },
+
+      toggleSpeaker() {
+        this.speakerOn = !this.speakerOn;
+        this.remoteGainNodes.forEach((g) => {
+          g.gain.value = this.speakerOn ? this.speakerGainValue : 0;
+        });
+        this.updateUI();
+        showToast(this.speakerOn ? '遠端語音喇叭已開啟' : '遠端語音已靜音', 'info');
+      },
+
+      attachRemoteStream(stream) {
+        try {
+          const ctx = AudioMediaEngine.ensureCtx();
+          const audioEl = new Audio();
+          audioEl.srcObject = stream;
+          audioEl.muted = true; // Route through Web Audio for Gain + Compressor
+          audioEl.play().catch(() => {});
+
+          const src = ctx.createMediaStreamSource(stream);
+          const comp = ctx.createDynamicsCompressor();
+          const gain = ctx.createGain();
+          gain.gain.value = this.speakerOn ? this.speakerGainValue : 0;
+          src.connect(comp);
+          comp.connect(gain);
+          gain.connect(ctx.destination);
+          this.remoteGainNodes.push(gain);
+        } catch (e) {}
+      },
+
+      setMicGain(pct) {
+        this.micGainValue = pct / 100;
+        if (this.micGainNode) this.micGainNode.gain.value = this.micGainValue;
+      },
+
+      setSpeakerGain(pct) {
+        this.speakerGainValue = pct / 100;
+        this.remoteGainNodes.forEach((g) => {
+          g.gain.value = this.speakerOn ? this.speakerGainValue : 0;
+        });
+      },
+
+      updateUI() {
+        const wMic = $('btn-wait-mic');
+        const gMic = $('btn-game-mic');
+        const wSpk = $('btn-wait-speaker');
+        if (wMic) {
+          wMic.textContent = this.micActive ? '🎙️ 麥克風開啟中' : '🎙️ 開啟麥克風';
+          wMic.classList.toggle('border-emerald-400', this.micActive);
+        }
+        if (gMic) {
+          gMic.textContent = this.micActive ? '🎙️🔴' : '🎙️';
+        }
+        if (wSpk) {
+          wSpk.textContent = this.speakerOn ? '🔊 喇叭已開' : '🔇 喇叭靜音';
+        }
+        const st = $('wait-voice-status');
+        if (st) st.textContent = this.micActive ? '語音傳輸中' : '語音待機中';
+      }
+    };
+
+    /* =========================================================================
+       WALLPAPER MANAGER (GitHub Contents API + Portrait/Landscape Split + Upload)
+       ========================================================================= */
+    const WallpaperManager = {
+      enabled: true,
+      mode: 'slideshow', // 'slideshow' | 'single'
+      intervalSec: 15,
+      dimPct: 58,
+      blurPx: 0,
+      allImages: [], // { url, orientation: 'portrait'|'landscape', source: 'github'|'custom' }
+      currentIdx: 0,
+      timer: null,
+      ghOwner: '',
+      ghRepo: '',
+
+      init() {
+        this.detectGitHubRepo();
+        this.applyVisualFilters();
+        this.scanGitHubFolder();
+        window.addEventListener('resize', () => this.onOrientationChange());
+        window.addEventListener('orientationchange', () => setTimeout(() => this.onOrientationChange(), 200));
+      },
+
+      detectGitHubRepo() {
+        const host = window.location.hostname;
+        if (host.endsWith('.github.io')) {
+          this.ghOwner = host.replace('.github.io', '');
+          const parts = window.location.pathname.split('/').filter(Boolean);
+          this.ghRepo = parts.length > 0 ? parts[0] : `${this.ghOwner}.github.io`;
+          $('set-gh-owner').value = this.ghOwner;
+          $('set-gh-repo').value = this.ghRepo;
+        }
+      },
+
+      isPortraitViewport() {
+        return window.innerHeight > window.innerWidth;
+      },
+
+      getActivePlaylist() {
+        const want = this.isPortraitViewport() ? 'portrait' : 'landscape';
+        const custom = this.allImages.filter((i) => i.source === 'custom' && i.orientation === want);
+        if (custom.length > 0) return custom;
+        return this.allImages.filter((i) => i.source === 'github' && i.orientation === want);
+      },
+
+      preloadAndClassify(url, source) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const orientation = img.naturalHeight > img.naturalWidth ? 'portrait' : 'landscape';
+            this.allImages.push({ url, orientation, source });
+            resolve(true);
+          };
+          img.onerror = () => resolve(false);
+          img.src = url;
+        });
+      },
+
+      async scanGitHubFolder() {
+        const owner = ($('set-gh-owner').value || this.ghOwner || '').trim();
+        const repo = ($('set-gh-repo').value || this.ghRepo || '').trim();
+        const folder = GAME_CONFIG.wallpaperFolder || 'wallpapers';
+        const imgExts = /\.(jpg|jpeg|png|webp|gif|avif|svg)$/i;
+        let urls = [];
+
+        // 1. Try GitHub Contents API if owner & repo exist
+        if (owner && repo) {
+          try {
+            const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${folder}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data)) {
+                urls = data.filter((f) => f.type === 'file' && imgExts.test(f.name) && f.download_url).map((f) => f.download_url);
+              }
+            }
+          } catch (e) {}
+        }
+
+        // 2. Fallback to ./wallpapers/manifest.json
+        if (urls.length === 0) {
+          try {
+            const res = await fetch(`./${folder}/manifest.json`);
+            if (res.ok) {
+              const list = await res.json();
+              if (Array.isArray(list)) {
+                urls = list.map((name) => name.startsWith('http') ? name : `./${folder}/${name}`);
+              }
+            }
+          } catch (e) {}
+        }
+
+        this.allImages = this.allImages.filter((i) => i.source !== 'github');
+        if (urls.length > 0) {
+          await Promise.all(urls.map((u) => this.preloadAndClassify(u, 'github')));
+        }
+        this.currentIdx = 0;
+        this.renderCurrent();
+        this.restartTimer();
+      },
+
+      async uploadCustomFiles(files) {
+        if (!files || files.length === 0) return;
+        let added = 0;
+        for (const f of Array.from(files)) {
+          const url = URL.createObjectURL(f);
+          const ok = await this.preloadAndClassify(url, 'custom');
+          if (ok) added++;
+        }
+        if (added > 0) {
+          this.currentIdx = 0;
+          this.renderCurrent();
+          this.restartTimer();
+          showToast(`已載入 ${added} 張自訂桌布並自動依直／橫式分類`, 'success');
+        }
+      },
+
+      clearCustom() {
+        this.allImages.filter((i) => i.source === 'custom').forEach((i) => URL.revokeObjectURL(i.url));
+        this.allImages = this.allImages.filter((i) => i.source !== 'custom');
+        this.currentIdx = 0;
+        this.renderCurrent();
+        this.restartTimer();
+        showToast('已清除自訂桌布，恢復 GitHub 資料夾或預設背景', 'info');
+      },
+
+      onOrientationChange() {
+        this.currentIdx = 0;
+        this.renderCurrent();
+      },
+
+      next() {
+        const list = this.getActivePlaylist();
+        if (list.length === 0) {
+          showToast('目前螢幕方向尚無可用桌布圖片', 'info');
+          return;
+        }
+        this.currentIdx = (this.currentIdx + 1) % list.length;
+        this.renderCurrent();
+      },
+
+      renderCurrent() {
+        const layer = $('game-wallpaper-layer');
+        const list = this.getActivePlaylist();
+        const dirLabel = this.isPortraitViewport() ? '直式' : '橫式';
+
+        if (!this.enabled || list.length === 0) {
+          layer.style.backgroundImage = 'none';
+          layer.style.opacity = '0';
+          $('wp-status-text').textContent = !this.enabled
+            ? '桌布已關閉（使用古風木紋背景）'
+            : `目前 ${dirLabel} 清單無對應圖片，平滑退回古風木紋漸層背景`;
+          return;
+        }
+        const item = list[this.currentIdx % list.length];
+        layer.style.backgroundImage = `url("${item.url}")`;
+        layer.style.opacity = '1';
+        $('wp-status-text').textContent = `播放中（${dirLabel} ${this.currentIdx % list.length + 1}/${list.length}・來源：${item.source === 'custom' ? '本機自訂' : 'GitHub 資料夾'}）`;
+      },
+
+      applyVisualFilters() {
+        $('game-wallpaper-mask').style.backgroundColor = `rgba(18, 12, 8, ${this.dimPct / 100})`;
+        $('game-wallpaper-layer').style.filter = this.blurPx > 0 ? `blur(${this.blurPx}px)` : 'none';
+      },
+
+      restartTimer() {
+        if (this.timer) { clearInterval(this.timer); this.timer = null; }
+        if (this.enabled && this.mode === 'slideshow') {
+          this.timer = setInterval(() => {
+            const list = this.getActivePlaylist();
+            if (list.length > 1) {
+              this.currentIdx = (this.currentIdx + 1) % list.length;
+              this.renderCurrent();
+            }
+          }, this.intervalSec * 1000);
+        }
+      }
+    };
+
+    /* =========================================================================
+       VICTORY REWARD MANAGER (High-Res Canvas Certificate + Hidden Image Unlock)
+       ========================================================================= */
+    const VictoryRewardManager = {
+      fallbackHiddenDataUrl: null,
+
+      generateFallbackHiddenArt(winnerName, modeText) {
+        const c = document.createElement('canvas');
+        c.width = 960;
+        c.height = 540;
+        const ctx = c.getContext('2d');
+        const grad = ctx.createRadialGradient(480, 270, 30, 480, 270, 520);
+        grad.addColorStop(0, '#5c1f16');
+        grad.addColorStop(0.55, '#2b120c');
+        grad.addColorStop(1, '#0e0705');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 960, 540);
+
+        // Golden decorative rings
+        ctx.strokeStyle = 'rgba(245, 200, 105, 0.35)';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(480, 270, 210, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(245, 200, 105, 0.75)';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(24, 24, 912, 492);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(36, 36, 888, 468);
+
+        // Center Golden Chess Emblem
+        const pGrad = ctx.createRadialGradient(455, 215, 10, 480, 240, 95);
+        pGrad.addColorStop(0, '#fff4cf');
+        pGrad.addColorStop(0.6, '#e3b254');
+        pGrad.addColorStop(1, '#8c5a18');
+        ctx.fillStyle = pGrad;
+        ctx.beginPath(); ctx.arc(480, 235, 92, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#5c1812';
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.arc(480, 235, 76, 0, Math.PI * 2); ctx.stroke();
+
+        ctx.fillStyle = '#7f1d1d';
+        ctx.font = '900 92px "Noto Serif TC", "DFKai-SB", serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('帥', 480, 242);
+
+        ctx.fillStyle = '#fde68a';
+        ctx.font = '900 38px "Noto Serif TC", serif';
+        ctx.fillText('無雙棋聖・隱藏榮耀紀念圖', 480, 382);
+        ctx.fillStyle = '#f5d08a';
+        ctx.font = '700 22px "Noto Serif TC", serif';
+        ctx.fillText(`恭賀【${winnerName}】稱霸 ${modeText}`, 480, 434);
+
+        return c.toDataURL('image/png');
+      },
+
+      drawCertificate(winnerName, stats) {
+        const canvas = $('champion-cert-canvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+
+        // Ivory parchment background
+        const bg = ctx.createLinearGradient(0, 0, W, H);
+        bg.addColorStop(0, '#fcf6e8');
+        bg.addColorStop(0.5, '#f5e6c4');
+        bg.addColorStop(1, '#ecd4a0');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        // Double Golden Border
+        ctx.strokeStyle = '#b47d24';
+        ctx.lineWidth = 14;
+        ctx.strokeRect(28, 28, W - 56, H - 56);
+        ctx.strokeStyle = '#7c4e12';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(48, 48, W - 96, H - 96);
+
+        // Corner Filigree Squares
+        const corners = [[48, 48], [W - 96, 48], [48, H - 96], [W - 96, H - 96]];
+        ctx.strokeStyle = '#b47d24';
+        ctx.lineWidth = 4;
+        corners.forEach(([x, y]) => ctx.strokeRect(x, y, 48, 48));
+
+        // Title
+        ctx.fillStyle = '#5c2d0c';
+        ctx.textAlign = 'center';
+        ctx.font = '900 58px "Noto Serif TC", "DFKai-SB", serif';
+        ctx.fillText('冠 軍 榮 耀 獎 狀', W / 2, 145);
+
+        ctx.fillStyle = '#9a621a';
+        ctx.font = '700 26px "Noto Serif TC", serif';
+        ctx.fillText(GAME_CONFIG.gameName, W / 2, 198);
+
+        // Divider
+        ctx.strokeStyle = '#c48d30';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(220, 228); ctx.lineTo(W - 220, 228); ctx.stroke();
+
+        // Winner Name
+        ctx.fillStyle = '#291508';
+        ctx.font = '700 30px "Noto Serif TC", serif';
+        ctx.fillText('茲 證 明 棋 士', W / 2, 290);
+
+        ctx.fillStyle = '#991b1b';
+        ctx.font = '900 68px "Noto Serif TC", "DFKai-SB", serif';
+        ctx.fillText(winnerName, W / 2, 372);
+
+        // Achievement Summary
+        ctx.fillStyle = '#3b200d';
+        ctx.font = '700 28px "Noto Serif TC", serif';
+        ctx.fillText(`於【${stats.modeLabel}】賽事中擊敗 ${stats.opponentName}，勇奪最終總冠軍！`, W / 2, 446);
+
+        ctx.fillStyle = '#5c3a1a';
+        ctx.font = '600 24px "Noto Serif TC", serif';
+        ctx.fillText(`總比分：${stats.seriesScore} ｜ 總回合：${stats.turns} 步 ｜ 吃子戰果：${stats.capturedCount} 子`, W / 2, 498);
+
+        // Date & Serial Number
+        const nowStr = new Date().toLocaleString('zh-TW', { hour12: false });
+        const serial = 'XQ-' + Date.now().toString(36).toUpperCase().slice(-7);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#5c3a1a';
+        ctx.font = '600 22px "Noto Serif TC", serif';
+        ctx.fillText(`頒發時間：${nowStr}`, 110, 680);
+        ctx.fillText(`認證編號：${serial}`, 110, 718);
+
+        // Red Official Stamp (棋聖認證)
+        ctx.save();
+        ctx.translate(W - 210, 650);
+        ctx.rotate(-0.08);
+        ctx.strokeStyle = '#b91c1c';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(-68, -68, 136, 136);
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-58, -58, 116, 116);
+        ctx.fillStyle = '#b91c1c';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '900 42px "DFKai-SB", "Noto Serif TC", serif';
+        ctx.fillText('棋聖', 0, -24);
+        ctx.fillText('認證', 0, 26);
+        ctx.restore();
+      },
+
+      triggerFinalChampionReward(winnerPlayer, stats) {
+        AudioMediaEngine.playVictoryFanfare();
+        const mode = GAME_CONFIG.victoryReward.mode || 'both';
+        const winnerName = winnerPlayer?.name || '冠軍棋士';
+
+        $('champ-subtitle').textContent = `🎉 恭喜【${winnerName}】打敗對手【${stats.opponentName}】，榮登終局總冠軍！`;
+
+        const showCert = mode === 'certificate' || mode === 'both';
+        const showHidden = mode === 'hiddenImage' || mode === 'both';
+        $('champ-cert-section').classList.toggle('hidden', !showCert);
+        $('champ-hidden-section').classList.toggle('hidden', !showHidden);
+
+        if (showCert) {
+          this.drawCertificate(winnerName, stats);
+        }
+
+        if (showHidden) {
+          const imgEl = $('champ-hidden-img');
+          const targetUrl = GAME_CONFIG.victoryReward.customHiddenDataUrl || GAME_CONFIG.victoryReward.hiddenImageUrl;
+          const fallbackUrl = this.generateFallbackHiddenArt(winnerName, stats.modeLabel);
+          this.fallbackHiddenDataUrl = fallbackUrl;
+
+          imgEl.onerror = () => {
+            imgEl.onerror = null;
+            imgEl.src = fallbackUrl;
+          };
+          imgEl.src = targetUrl || fallbackUrl;
+        }
+
+        $('modal-champion').classList.remove('hidden');
+      },
+
+      downloadCertificate() {
+        const link = document.createElement('a');
+        link.download = `xiangqi_champion_certificate_${Date.now()}.png`;
+        link.href = $('champion-cert-canvas').toDataURL('image/png');
+        link.click();
+        showToast('已下載冠軍獎狀圖檔！', 'success');
+      },
+
+      downloadHiddenImage() {
+        const img = $('champ-hidden-img');
+        const link = document.createElement('a');
+        link.download = `xiangqi_hidden_reward_${Date.now()}.png`;
+        link.href = img.src;
+        link.click();
+        showToast('已開始下載隱藏獎勵圖檔', 'success');
+      }
+    };
+
+    /* =========================================================================
+       [遊戲開發區] DUAL-MODE XIANGQI GAME ENGINE
+       ========================================================================= */
+    const PIECE_CHARS = {
+      R: { K: '帥', A: '仕', E: '相', R: '俥', H: '傌', C: '炮', P: '兵' },
+      B: { K: '將', A: '士', E: '象', R: '車', H: '馬', C: '包', P: '卒' }
+    };
+    const DARK_RANKS = { K: 7, A: 6, E: 5, R: 4, H: 3, C: 2, P: 1 };
+    const TRAD_VALUES = { K: 10000, R: 900, C: 450, H: 400, A: 200, E: 200, P: 100 };
+
+    // Positional bonuses for Red (mirrored vertically for Black)
+    const PST_PAWN = [
+      [0,0,0,0,0,0,0,0,0],
+      [20,30,45,60,70,60,45,30,20],
+      [20,35,50,65,75,65,50,35,20],
+      [15,25,40,55,60,55,40,25,15],
+      [10,20,30,35,40,35,30,20,10],
+      [0,0,0,5,10,5,0,0,0],
+      [0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0]
+    ];
+
+    const GameState = {
+      playType: 'ai', // 'ai' | 'local' | 'online'
+      gameMode: 'traditional', // 'traditional' | 'dark'
+      matchFormat: 'BO1', // 'BO1' | 'BO3'
+      chainCaptureEnabled: false,
+
+      // Seat 0 = First Player (Red in Traditional, First Flipper in Dark), Seat 1 = Second Player
+      players: [
+        { seat: 0, id: 'local-0', name: '紅方棋士', isAI: false, aiLevel: 'normal', disconnected: false, side: 'R', wins: 0 },
+        { seat: 1, id: 'ai-1', name: '電腦棋士', isAI: true, aiLevel: 'normal', disconnected: false, side: 'B', wins: 0 }
+      ],
+      mySeat: 0, // For online or AI mode
+      turnSeat: 0,
+      status: 'lobby', // 'lobby' | 'waiting' | 'playing' | 'ended'
+      turnsCount: 0,
+      noProgressCount: 0, // Dark chess 50-move draw counter
+      timerSec: 60,
+      timerInterval: null,
+
+      // Board Data
+      tradBoard: [], // 10x9 array of null | { side:'R'|'B', type:'K'|'A'|'E'|'R'|'H'|'C'|'P' }
+      darkBoard: [], // 4x8 array of null | { side:'R'|'B', type, rank, revealed:boolean, justFlipped?:boolean }
+      darkColorsAssigned: false,
+
+      selected: null, // { r, c }
+      validMoves: [], // [{ r, c, isCapture }]
+      lastMove: null, // { fr, fc, tr, tc }
+      chainPiece: null, // Dark chess active chain-capturing piece { r, c }
+      capturedByRed: [],
+      capturedByBlack: [],
+      history: [], // Snapshots for Undo in local/AI
+      aiThinking: false
+    };
+
+    /* ----------------- Traditional 9x10 Rules ----------------- */
+    function initTraditionalBoard() {
+      const b = Array.from({ length: 10 }, () => Array(9).fill(null));
+      const back = ['R', 'H', 'E', 'A', 'K', 'A', 'E', 'H', 'R'];
+      for (let c = 0; c < 9; c++) {
+        b[0][c] = { side: 'B', type: back[c] };
+        b[9][c] = { side: 'R', type: back[c] };
+      }
+      b[2][1] = { side: 'B', type: 'C' }; b[2][7] = { side: 'B', type: 'C' };
+      b[7][1] = { side: 'R', type: 'C' }; b[7][7] = { side: 'R', type: 'C' };
+      for (let c = 0; c < 9; c += 2) {
+        b[3][c] = { side: 'B', type: 'P' };
+        b[6][c] = { side: 'R', type: 'P' };
+      }
+      return b;
+    }
+
+    function inBoundsTrad(r, c) { return r >= 0 && r < 10 && c >= 0 && c < 9; }
+
+    function findKing(board, side) {
+      for (let r = 0; r < 10; r++) {
+        for (let c = 3; c <= 5; c++) {
+          const p = board[r][c];
+          if (p && p.side === side && p.type === 'K') return { r, c };
+        }
+      }
+      return null;
+    }
+
+    function isKingsFacing(board) {
+      const rk = findKing(board, 'R');
+      const bk = findKing(board, 'B');
+      if (!rk || !bk || rk.c !== bk.c) return false;
+      for (let r = bk.r + 1; r < rk.r; r++) {
+        if (board[r][rk.c]) return false;
+      }
+      return true;
+    }
+
+    function getPseudoMovesTrad(board, r, c) {
+      const p = board[r][c];
+      if (!p) return [];
+      const moves = [];
+      const { side, type } = p;
+      const add = (nr, nc) => {
+        if (!inBoundsTrad(nr, nc)) return;
+        const target = board[nr][nc];
+        if (!target || target.side !== side) {
+          moves.push({ r: nr, c: nc, isCapture: !!target });
+        }
+      };
+
+      if (type === 'K') {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        const rMin = side === 'R' ? 7 : 0;
+        const rMax = side === 'R' ? 9 : 2;
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= rMin && nr <= rMax && nc >= 3 && nc <= 5) add(nr, nc);
+        }
+      } else if (type === 'A') {
+        const dirs = [[-1,-1],[-1,1],[1,-1],[1,1]];
+        const rMin = side === 'R' ? 7 : 0;
+        const rMax = side === 'R' ? 9 : 2;
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (nr >= rMin && nr <= rMax && nc >= 3 && nc <= 5) add(nr, nc);
+        }
+      } else if (type === 'E') {
+        const dirs = [[-2,-2],[-2,2],[2,-2],[2,2]];
+        for (const [dr, dc] of dirs) {
+          const nr = r + dr, nc = c + dc;
+          if (!inBoundsTrad(nr, nc)) continue;
+          if (side === 'R' && nr < 5) continue; // Cannot cross river
+          if (side === 'B' && nr > 4) continue;
+          if (board[r + dr / 2][c + dc / 2]) continue; // Elephant eye blocked
+          add(nr, nc);
+        }
+      } else if (type === 'H') {
+        const steps = [
+          [-2,-1,-1,0], [-2,1,-1,0], [2,-1,1,0], [2,1,1,0],
+          [-1,-2,0,-1], [1,-2,0,-1], [-1,2,0,1], [1,2,0,1]
+        ];
+        for (const [dr, dc, lr, lc] of steps) {
+          const nr = r + dr, nc = c + dc;
+          if (!inBoundsTrad(nr, nc)) continue;
+          if (board[r + lr][c + lc]) continue; // Horse leg blocked
+          add(nr, nc);
+        }
+      } else if (type === 'R') {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dr, dc] of dirs) {
+          let nr = r + dr, nc = c + dc;
+          while (inBoundsTrad(nr, nc)) {
+            const t = board[nr][nc];
+            if (!t) {
+              moves.push({ r: nr, c: nc, isCapture: false });
+            } else {
+              if (t.side !== side) moves.push({ r: nr, c: nc, isCapture: true });
+              break;
+            }
+            nr += dr; nc += dc;
+          }
+        }
+      } else if (type === 'C') {
+        const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+        for (const [dr, dc] of dirs) {
+          let nr = r + dr, nc = c + dc;
+          let jumped = false;
+          while (inBoundsTrad(nr, nc)) {
+            const t = board[nr][nc];
+            if (!jumped) {
+              if (!t) moves.push({ r: nr, c: nc, isCapture: false });
+              else jumped = true;
+            } else {
+              if (t) {
+                if (t.side !== side) moves.push({ r: nr, c: nc, isCapture: true });
+                break;
+              }
+            }
+            nr += dr; nc += dc;
+          }
+        }
+      } else if (type === 'P') {
+        const fwd = side === 'R' ? -1 : 1;
+        add(r + fwd, c);
+        const crossed = side === 'R' ? r <= 4 : r >= 5;
+        if (crossed) {
+          add(r, c - 1);
+          add(r, c + 1);
+        }
+      }
+      return moves;
+    }
+
+    function isInCheckTrad(board, side) {
+      const k = findKing(board, side);
+      if (!k) return true;
+      if (isKingsFacing(board)) return true;
+      const opp = side === 'R' ? 'B' : 'R';
+      for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+          const p = board[r][c];
+          if (p && p.side === opp) {
+            const pm = getPseudoMovesTrad(board, r, c);
+            if (pm.some((m) => m.r === k.r && m.c === k.c)) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function getLegalMovesTrad(board, r, c) {
+      const p = board[r][c];
+      if (!p) return [];
+      const pseudo = getPseudoMovesTrad(board, r, c);
+      const legal = [];
+      for (const m of pseudo) {
+        const saved = board[m.r][m.c];
+        board[m.r][m.c] = p;
+        board[r][c] = null;
+        if (!isInCheckTrad(board, p.side)) legal.push(m);
+        board[r][c] = p;
+        board[m.r][m.c] = saved;
+      }
+      return legal;
+    }
+
+    function getAllLegalMovesTrad(board, side) {
+      const all = [];
+      for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+          const p = board[r][c];
+          if (p && p.side === side) {
+            const ms = getLegalMovesTrad(board, r, c);
+            for (const m of ms) all.push({ fr: r, fc: c, tr: m.r, tc: m.c, isCapture: m.isCapture });
+          }
+        }
+      }
+      return all;
+    }
+
+    /* ----------------- Traditional AI (Minimax + Alpha-Beta) ----------------- */
+    function evalTraditionalBoard(board, aiSide) {
+      let score = 0;
+      for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+          const p = board[r][c];
+          if (!p) continue;
+          let v = TRAD_VALUES[p.type] || 0;
+          if (p.type === 'P') {
+            v += p.side === 'R' ? PST_PAWN[r][c] : PST_PAWN[9 - r][c];
+          } else if (p.type === 'H' || p.type === 'C') {
+            v += (4 - Math.abs(4 - c)) * 6;
+          }
+          score += p.side === aiSide ? v : -v;
+        }
+      }
+      return score;
+    }
+
+    function chooseTraditionalAIMove(board, aiSide, level) {
+      const moves = getAllLegalMovesTrad(board, aiSide);
+      if (moves.length === 0) return null;
+
+      // Sort captures first for better alpha-beta pruning
+      moves.sort((a, b) => (b.isCapture ? 1 : 0) - (a.isCapture ? 1 : 0));
+
+      if (level === 'novice' && Math.random() < 0.45) {
+        return moves[Math.floor(Math.random() * moves.length)];
+      }
+
+      const depth = level === 'master' ? 3 : (level === 'normal' ? 2 : 1);
+      const opp = aiSide === 'R' ? 'B' : 'R';
+
+      function alphaBeta(d, alpha, beta, maximizing) {
+        const curSide = maximizing ? aiSide : opp;
+        if (d === 0) return evalTraditionalBoard(board, aiSide);
+        const ms = getAllLegalMovesTrad(board, curSide);
+        if (ms.length === 0) return maximizing ? -99999 - d : 99999 + d;
+        ms.sort((a, b) => (b.isCapture ? 1 : 0) - (a.isCapture ? 1 : 0));
+
+        if (maximizing) {
+          let best = -Infinity;
+          for (const m of ms) {
+            const p = board[m.fr][m.fc], cap = board[m.tr][m.tc];
+            board[m.tr][m.tc] = p; board[m.fr][m.fc] = null;
+            const val = alphaBeta(d - 1, alpha, beta, false);
+            board[m.fr][m.fc] = p; board[m.tr][m.tc] = cap;
+            if (val > best) best = val;
+            if (best > alpha) alpha = best;
+            if (beta <= alpha) break;
+          }
+          return best;
+        } else {
+          let best = Infinity;
+          for (const m of ms) {
+            const p = board[m.fr][m.fc], cap = board[m.tr][m.tc];
+            board[m.tr][m.tc] = p; board[m.fr][m.fc] = null;
+            const val = alphaBeta(d - 1, alpha, beta, true);
+            board[m.fr][m.fc] = p; board[m.tr][m.tc] = cap;
+            if (val < best) best = val;
+            if (best < beta) beta = best;
+            if (beta <= alpha) break;
+          }
+          return best;
+        }
+      }
+
+      let bestScore = -Infinity;
+      let bestMoves = [];
+      for (const m of moves) {
+        const p = board[m.fr][m.fc], cap = board[m.tr][m.tc];
+        board[m.tr][m.tc] = p; board[m.fr][m.fc] = null;
+        const val = alphaBeta(depth - 1, -Infinity, Infinity, false);
+        board[m.fr][m.fc] = p; board[m.tr][m.tc] = cap;
+
+        if (val > bestScore) {
+          bestScore = val;
+          bestMoves = [m];
+        } else if (val === bestScore) {
+          bestMoves.push(m);
+        }
+      }
+      return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    /* ----------------- Taiwanese Dark Chess 4x8 Rules ----------------- */
+    function initDarkBoard() {
+      const types = ['K', 'A', 'A', 'E', 'E', 'R', 'R', 'H', 'H', 'C', 'C', 'P', 'P', 'P', 'P', 'P'];
+      const deck = [];
+      ['R', 'B'].forEach((side) => {
+        types.forEach((type) => {
+          deck.push({ side, type, rank: DARK_RANKS[type], revealed: false });
+        });
+      });
+      // Fisher-Yates shuffle
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      const grid = [];
+      let idx = 0;
+      for (let r = 0; r < 4; r++) {
+        const row = [];
+        for (let c = 0; c < 8; c++) row.push(deck[idx++]);
+        grid.push(row);
+      }
+      return grid;
+    }
+
+    function canDarkNormalCapture(attacker, defender) {
+      if (!attacker || !defender || !attacker.revealed || !defender.revealed) return false;
+      if (attacker.side === defender.side) return false;
+      if (attacker.type === 'C') return false; // Taiwanese Cannon CANNOT capture adjacent
+      // Special: Soldier (1) captures General (7), General (7) CANNOT capture Soldier (1)
+      if (attacker.rank === 1 && defender.rank === 7) return true;
+      if (attacker.rank === 7 && defender.rank === 1) return false;
+      return attacker.rank >= defender.rank;
+    }
+
+    function getLegalMovesDark(board, r, c, capturesOnly = false) {
+      const p = board[r][c];
+      if (!p || !p.revealed) return [];
+      const moves = [];
+      const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+
+      // 1-step orthogonal move / adjacent capture
+      for (const [dr, dc] of dirs) {
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr >= 4 || nc < 0 || nc >= 8) continue;
+        const t = board[nr][nc];
+        if (!t) {
+          if (!capturesOnly) moves.push({ r: nr, c: nc, isCapture: false });
+        } else if (t.revealed && canDarkNormalCapture(p, t)) {
+          moves.push({ r: nr, c: nc, isCapture: true });
+        }
+      }
+
+      // Taiwanese Cannon Jump Capture (exact 1 screen piece of any kind, capture any revealed enemy)
+      if (p.type === 'C') {
+        for (const [dr, dc] of dirs) {
+          let nr = r + dr, nc = c + dc;
+          let screens = 0;
+          while (nr >= 0 && nr < 4 && nc >= 0 && nc < 8) {
+            const t = board[nr][nc];
+            if (t) {
+              screens++;
+              if (screens === 2) {
+                if (t.revealed && t.side !== p.side) {
+                  moves.push({ r: nr, c: nc, isCapture: true });
+                }
+                break;
+              }
+            }
+            nr += dr; nc += dc;
+          }
+        }
+      }
+      return moves;
+    }
+
+    function hasAnyDarkAction(board, side) {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 8; c++) {
+          const p = board[r][c];
+          if (!p) continue;
+          if (!p.revealed) return true;
+          if (p.side === side && getLegalMovesDark(board, r, c).length > 0) return true;
+        }
+      }
+      return false;
+    }
+
+    function countDarkPieces(board, side) {
+      let n = 0;
+      for (let r = 0; r < 4; r++)
+        for (let c = 0; c < 8; c++)
+          if (board[r][c] && board[r][c].side === side) n++;
+      return n;
+    }
+
+    function isSquareThreatenedDark(board, r, c, myPiece) {
+      const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+      for (const [dr, dc] of dirs) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < 4 && nc >= 0 && nc < 8) {
+          const opp = board[nr][nc];
+          if (opp && opp.revealed && opp.side !== myPiece.side && canDarkNormalCapture(opp, myPiece)) return true;
+        }
+        // Check enemy cannon jump threat
+        let cr = r + dr, cc = c + dc, screens = 0;
+        while (cr >= 0 && cr < 4 && cc >= 0 && cc < 8) {
+          const t = board[cr][cc];
+          if (t) {
+            screens++;
+            if (screens === 2) {
+              if (t.revealed && t.side !== myPiece.side && t.type === 'C') return true;
+              break;
+            }
+          }
+          cr += dr; cc += dc;
+        }
+      }
+      return false;
+    }
+
+    /* ----------------- Taiwanese Dark Chess AI ----------------- */
+    function chooseDarkAIAction(board, aiSide, level) {
+      const actions = [];
+      const rankWeight = { 7: 100, 6: 65, 5: 45, 4: 35, 3: 25, 2: 58, 1: 18 };
+
+      // If in chain-capture state
+      if (GameState.chainPiece) {
+        const { r, c } = GameState.chainPiece;
+        const caps = getLegalMovesDark(board, r, c, true);
+        if (caps.length > 0) {
+          caps.sort((a, b) => rankWeight[board[b.r][b.c].rank] - rankWeight[board[a.r][a.c].rank]);
+          return { kind: 'move', fr: r, fc: c, tr: caps[0].r, tc: caps[0].c };
+        }
+        return { kind: 'endChain' };
+      }
+
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 8; c++) {
+          const p = board[r][c];
+          if (!p) continue;
+          if (!p.revealed) {
+            let score = 14 + Math.random() * 6;
+            // Slightly prefer flipping away from enemy high pieces
+            actions.push({ kind: 'flip', r, c, score });
+          } else if (GameState.darkColorsAssigned && p.side === aiSide) {
+            const curThreat = isSquareThreatenedDark(board, r, c, p);
+            const ms = getLegalMovesDark(board, r, c);
+            for (const m of ms) {
+              let score = 0;
+              const target = board[m.r][m.c];
+              if (m.isCapture && target) {
+                score += rankWeight[target.rank] * 1.6 + 25;
+                if (p.rank === 1 && target.rank === 7) score += 90; // Pawn kills King!
+              } else {
+                score += 4;
+                if (curThreat) score += rankWeight[p.rank] * 0.9; // Escape threat!
+              }
+              // Simulate to check post-move threat
+              board[m.r][m.c] = p; board[r][c] = null;
+              const nextThreat = isSquareThreatenedDark(board, m.r, m.c, p);
+              board[r][c] = p; board[m.r][m.c] = target;
+
+              if (nextThreat) score -= rankWeight[p.rank] * (level === 'master' ? 1.15 : 0.75);
+              score += Math.random() * (level === 'novice' ? 40 : (level === 'normal' ? 12 : 3));
+              actions.push({ kind: 'move', fr: r, fc: c, tr: m.r, tc: m.c, score });
+            }
+          }
+        }
+      }
+      if (actions.length === 0) return null;
+      actions.sort((a, b) => b.score - a.score);
+      if (level === 'novice' && actions.length > 3 && Math.random() < 0.4) {
+        return actions[Math.floor(Math.random() * Math.min(actions.length, 6))];
+      }
+      return actions[0];
+    }
+
+    /* =========================================================================
+       MATCH FLOW, TURN EXECUTION & RENDERING
+       ========================================================================= */
+    function isMyTurnToControl() {
+      if (GameState.status !== 'playing') return false;
+      const curP = GameState.players[GameState.turnSeat];
+      if (curP.isAI || curP.disconnected) return false;
+      if (GameState.playType === 'local') return true;
+      return GameState.turnSeat === GameState.mySeat;
+    }
+
+    function startNewRound(resetSeries = false) {
+      if (resetSeries) {
+        GameState.players[0].wins = 0;
+        GameState.players[1].wins = 0;
+      }
+      GameState.status = 'playing';
+      GameState.turnSeat = 0;
+      GameState.turnsCount = 0;
+      GameState.noProgressCount = 0;
+      GameState.selected = null;
+      GameState.validMoves = [];
+      GameState.lastMove = null;
+      GameState.chainPiece = null;
+      GameState.capturedByRed = [];
+      GameState.capturedByBlack = [];
+      GameState.history = [];
+      GameState.aiThinking = false;
+
+      if (GameState.gameMode === 'traditional') {
+        GameState.players[0].side = 'R';
+        GameState.players[1].side = 'B';
+        GameState.tradBoard = initTraditionalBoard();
+        GameState.darkColorsAssigned = true;
+      } else {
+        GameState.players[0].side = null;
+        GameState.players[1].side = null;
+        GameState.darkBoard = initDarkBoard();
+        GameState.darkColorsAssigned = false;
+      }
+
+      switchView('game');
+      renderBoardLayout();
+      renderAll();
+      startTurnTimer();
+
+      if (GameState.playType === 'online' && NetworkEngine.isHost) {
+        NetworkEngine.broadcastState();
+      }
+      AudioMediaEngine.speak(GameState.gameMode === 'traditional' ? '對局開始，紅方先行' : '暗棋開局，請先手翻棋');
+      scheduleAIIfNeeded();
+    }
+
+    function saveHistorySnapshot() {
+      if (GameState.playType === 'online') return;
+      GameState.history.push(JSON.stringify({
+        turnSeat: GameState.turnSeat,
+        turnsCount: GameState.turnsCount,
+        noProgressCount: GameState.noProgressCount,
+        tradBoard: GameState.tradBoard,
+        darkBoard: GameState.darkBoard,
+        darkColorsAssigned: GameState.darkColorsAssigned,
+        sides: [GameState.players[0].side, GameState.players[1].side],
+        capturedByRed: GameState.capturedByRed,
+        capturedByBlack: GameState.capturedByBlack,
+        lastMove: GameState.lastMove
+      }));
+      if (GameState.history.length > 40) GameState.history.shift();
+    }
+
+    function undoMove() {
+      if (GameState.playType === 'online') {
+        showToast('線上對戰模式不支援悔棋', 'warn');
+        return;
+      }
+      if (GameState.status !== 'playing' || GameState.history.length === 0) {
+        showToast('目前無步數可悔棋', 'info');
+        return;
+      }
+      // In AI mode, undo back to player's turn if possible
+      let steps = GameState.playType === 'ai' && GameState.history.length >= 2 && GameState.turnSeat === GameState.mySeat ? 2 : 1;
+      let snap = null;
+      while (steps-- > 0 && GameState.history.length > 0) {
+        snap = JSON.parse(GameState.history.pop());
+      }
+      if (!snap) return;
+      GameState.turnSeat = snap.turnSeat;
+      GameState.turnsCount = snap.turnsCount;
+      GameState.noProgressCount = snap.noProgressCount;
+      GameState.tradBoard = snap.tradBoard;
+      GameState.darkBoard = snap.darkBoard;
+      GameState.darkColorsAssigned = snap.darkColorsAssigned;
+      GameState.players[0].side = snap.sides[0];
+      GameState.players[1].side = snap.sides[1];
+      GameState.capturedByRed = snap.capturedByRed;
+      GameState.capturedByBlack = snap.capturedByBlack;
+      GameState.lastMove = snap.lastMove;
+      GameState.selected = null;
+      GameState.validMoves = [];
+      GameState.chainPiece = null;
+      renderAll();
+      showToast('已悔棋', 'info');
+    }
+
+    function applyAction(action, isSelfLocal = true) {
+      if (GameState.status !== 'playing') return;
+
+      // Online Guest sends action to Host
+      if (GameState.playType === 'online' && !NetworkEngine.isHost && isSelfLocal) {
+        NetworkEngine.sendToHost({ type: 'playerAction', seat: GameState.mySeat, action });
+        return;
+      }
+
+      if (GameState.gameMode === 'traditional') {
+        executeTraditionalAction(action, isSelfLocal);
+      } else {
+        executeDarkAction(action, isSelfLocal);
+      }
+    }
+
+    function executeTraditionalAction(action, isSelfLocal) {
+      const { fr, fc, tr, tc } = action;
+      const curPlayer = GameState.players[GameState.turnSeat];
+      const p = GameState.tradBoard[fr]?.[fc];
+      if (!p || p.side !== curPlayer.side) return;
+      const legal = getLegalMovesTrad(GameState.tradBoard, fr, fc);
+      if (!legal.some((m) => m.r === tr && m.c === tc)) return;
+
+      saveHistorySnapshot();
+      const target = GameState.tradBoard[tr][tc];
+      GameState.tradBoard[tr][tc] = p;
+      GameState.tradBoard[fr][fc] = null;
+      GameState.lastMove = { fr, fc, tr, tc };
+      GameState.selected = null;
+      GameState.validMoves = [];
+      GameState.turnsCount++;
+
+      if (target) {
+        if (curPlayer.side === 'R') GameState.capturedByRed.push(target);
+        else GameState.capturedByBlack.push(target);
+        AudioMediaEngine.playCapture();
+      } else {
+        AudioMediaEngine.playWoodMove();
+      }
+
+      // Switch turn
+      GameState.turnSeat = 1 - GameState.turnSeat;
+      const nextPlayer = GameState.players[GameState.turnSeat];
+      const inCheck = isInCheckTrad(GameState.tradBoard, nextPlayer.side);
+      const oppMoves = getAllLegalMovesTrad(GameState.tradBoard, nextPlayer.side);
+
+      renderAll();
+      resetTurnTimer();
+
+      if (oppMoves.length === 0) {
+        const reason = inCheck ? '絕殺將死' : '困斃（無合法步可走）';
+        AudioMediaEngine.speak('絕殺！', isSelfLocal);
+        finishRound(1 - GameState.turnSeat, reason);
+        return;
+      }
+
+      if (inCheck) {
+        AudioMediaEngine.playCheckAlert();
+        AudioMediaEngine.speak('將軍！', isSelfLocal);
+        flashBoardAlert('將 軍 ！');
+      } else if (target) {
+        AudioMediaEngine.speak('吃子', isSelfLocal);
+      }
+
+      if (GameState.playType === 'online' && NetworkEngine.isHost) {
+        NetworkEngine.broadcastState();
+      }
+      scheduleAIIfNeeded();
+    }
+
+    function executeDarkAction(action, isSelfLocal) {
+      const curPlayer = GameState.players[GameState.turnSeat];
+      // Clear previous flip animation flag
+      for (let r = 0; r < 4; r++)
+        for (let c = 0; c < 8; c++)
+          if (GameState.darkBoard[r][c]) GameState.darkBoard[r][c].justFlipped = false;
+
+      if (action.kind === 'endChain') {
+        GameState.chainPiece = null;
+        GameState.selected = null;
+        GameState.validMoves = [];
+        GameState.turnSeat = 1 - GameState.turnSeat;
+        finishDarkTurnCheck(isSelfLocal);
+        return;
+      }
+
+      if (action.kind === 'flip') {
+        if (GameState.chainPiece) return;
+        const { r, c } = action;
+        const p = GameState.darkBoard[r]?.[c];
+        if (!p || p.revealed) return;
+
+        saveHistorySnapshot();
+        p.revealed = true;
+        p.justFlipped = true;
+        GameState.lastMove = { fr: r, fc: c, tr: r, tc: c };
+        GameState.selected = null;
+        GameState.validMoves = [];
+        GameState.turnsCount++;
+        GameState.noProgressCount = 0;
+
+        if (!GameState.darkColorsAssigned) {
+          GameState.darkColorsAssigned = true;
+          GameState.players[GameState.turnSeat].side = p.side;
+          GameState.players[1 - GameState.turnSeat].side = p.side === 'R' ? 'B' : 'R';
+          showToast(`${curPlayer.name} 翻出${p.side === 'R' ? '紅棋' : '黑棋'}，陣營確定！`, 'success');
+        }
+        AudioMediaEngine.playFlip();
+        AudioMediaEngine.speak('翻棋', isSelfLocal);
+        GameState.turnSeat = 1 - GameState.turnSeat;
+        finishDarkTurnCheck(isSelfLocal);
+        return;
+      }
+
+      if (action.kind === 'move') {
+        const { fr, fc, tr, tc } = action;
+        const p = GameState.darkBoard[fr]?.[fc];
+        if (!p || !p.revealed || p.side !== curPlayer.side) return;
+        const capturesOnly = !!GameState.chainPiece;
+        if (capturesOnly && (GameState.chainPiece.r !== fr || GameState.chainPiece.c !== fc)) return;
+
+        const legal = getLegalMovesDark(GameState.darkBoard, fr, fc, capturesOnly);
+        const mv = legal.find((m) => m.r === tr && m.c === tc);
+        if (!mv) return;
+
+        saveHistorySnapshot();
+        const target = GameState.darkBoard[tr][tc];
+        GameState.darkBoard[tr][tc] = p;
+        GameState.darkBoard[fr][fc] = null;
+        GameState.lastMove = { fr, fc, tr, tc };
+        GameState.selected = null;
+        GameState.validMoves = [];
+        GameState.turnsCount++;
+
+        if (target) {
+          GameState.noProgressCount = 0;
+          if (curPlayer.side === 'R') GameState.capturedByRed.push(target);
+          else GameState.capturedByBlack.push(target);
+          AudioMediaEngine.playCapture();
+          AudioMediaEngine.speak('吃子', isSelfLocal);
+
+          // Check optional Taiwanese Chain Capture
+          if (GameState.chainCaptureEnabled) {
+            const nextCaps = getLegalMovesDark(GameState.darkBoard, tr, tc, true);
+            const oppSide = curPlayer.side === 'R' ? 'B' : 'R';
+            if (nextCaps.length > 0 && countDarkPieces(GameState.darkBoard, oppSide) > 0) {
+              GameState.chainPiece = { r: tr, c: tc };
+              GameState.selected = { r: tr, c: tc };
+              GameState.validMoves = nextCaps;
+              renderAll();
+              if (GameState.playType === 'online' && NetworkEngine.isHost) NetworkEngine.broadcastState();
+              scheduleAIIfNeeded();
+              return;
+            }
+          }
+        } else {
+          GameState.noProgressCount++;
+          AudioMediaEngine.playWoodMove();
+        }
+
+        GameState.chainPiece = null;
+        GameState.turnSeat = 1 - GameState.turnSeat;
+        finishDarkTurnCheck(isSelfLocal);
+      }
+    }
+
+    function finishDarkTurnCheck(isSelfLocal) {
+      renderAll();
+      resetTurnTimer();
+
+      if (GameState.darkColorsAssigned) {
+        const nextP = GameState.players[GameState.turnSeat];
+        const prevSeat = 1 - GameState.turnSeat;
+        const oppCount = countDarkPieces(GameState.darkBoard, nextP.side);
+        if (oppCount === 0) {
+          finishRound(prevSeat, '全殲敵軍棋子');
+          return;
+        }
+        if (!hasAnyDarkAction(GameState.darkBoard, nextP.side)) {
+          finishRound(prevSeat, '困斃（對手無合法步）');
+          return;
+        }
+      }
+
+      if (GameState.noProgressCount >= 50) {
+        finishRound(-1, '連續 50 步無翻棋且無吃子（自動和局）');
+        return;
+      }
+
+      if (GameState.playType === 'online' && NetworkEngine.isHost) {
+        NetworkEngine.broadcastState();
+      }
+      scheduleAIIfNeeded();
+    }
+
+    function finishRound(winnerSeat, reason) {
+      GameState.status = 'ended';
+      stopTurnTimer();
+      GameState.chainPiece = null;
+      GameState.selected = null;
+      GameState.validMoves = [];
+      renderAll();
+
+      if (winnerSeat >= 0) {
+        GameState.players[winnerSeat].wins++;
+      } else {
+        AudioMediaEngine.speak('和局');
+      }
+
+      if (GameState.playType === 'online' && NetworkEngine.isHost) {
+        NetworkEngine.broadcastState({ roundEnded: true, winnerSeat, reason });
+      }
+
+      showSettlementModal(winnerSeat, reason);
+    }
+
+    function showSettlementModal(winnerSeat, reason) {
+      const p0 = GameState.players[0];
+      const p1 = GameState.players[1];
+      const needWins = GameState.matchFormat === 'BO3' ? 2 : 1;
+      const seriesChampion = winnerSeat >= 0 && GameState.players[winnerSeat].wins >= needWins;
+
+      const modeLabel = GameState.gameMode === 'traditional' ? '傳統大盤象棋' : '台灣暗棋';
+      $('settle-mode-tag').textContent = modeLabel;
+      $('settle-reason').textContent = reason;
+      $('settle-series-score').textContent = `${p0.wins} : ${p1.wins}`;
+      $('settle-turns').textContent = `${GameState.turnsCount} 步`;
+      $('settle-red-cap').textContent = `${GameState.capturedByRed.length} 子`;
+      $('settle-black-cap').textContent = `${GameState.capturedByBlack.length} 子`;
+
+      if (winnerSeat === -1) {
+        $('settle-title').textContent = '🤝 本局和局！';
+      } else {
+        const w = GameState.players[winnerSeat];
+        $('settle-title').textContent = seriesChampion ? `👑 ${w.name} 奪得總冠軍！` : `🏆 ${w.name} 贏得本局！`;
+      }
+
+      const redList = GameState.capturedByRed.map((x) => PIECE_CHARS[x.side][x.type]).join(' ') || '無';
+      const blackList = GameState.capturedByBlack.map((x) => PIECE_CHARS[x.side][x.type]).join(' ') || '無';
+      $('settle-captured-detail').innerHTML = `<div><b>紅方俘獲：</b>${redList}</div><div class="mt-1"><b>黑方俘獲：</b>${blackList}</div>`;
+
+      $('btn-settle-next').textContent = seriesChampion ? '開啟新系列賽' : (GameState.matchFormat === 'BO3' ? '進入下一局' : '再來一局');
+      $('modal-settlement').classList.remove('hidden');
+
+      // Trigger Champion Reward if overall champion decided!
+      if (seriesChampion) {
+        const winner = GameState.players[winnerSeat];
+        const loser = GameState.players[1 - winnerSeat];
+        const capCount = winner.side === 'R' ? GameState.capturedByRed.length : GameState.capturedByBlack.length;
+        setTimeout(() => {
+          VictoryRewardManager.triggerFinalChampionReward(winner, {
+            modeLabel,
+            opponentName: loser.name,
+            seriesScore: `${p0.wins} : ${p1.wins}`,
+            turns: GameState.turnsCount,
+            capturedCount: capCount
+          });
+        }, 450);
+      }
+    }
+
+    function flashBoardAlert(text) {
+      const el = $('board-alert-banner');
+      el.textContent = text;
+      el.classList.remove('hidden');
+      setTimeout(() => el.classList.add('hidden'), 1150);
+    }
+
+    /* ----------------- Turn Timer & AI Scheduler ----------------- */
+    function startTurnTimer() {
+      stopTurnTimer();
+      GameState.timerSec = GAME_CONFIG.turnSeconds;
+      $('turn-timer').textContent = `${GameState.timerSec}s`;
+      GameState.timerInterval = setInterval(() => {
+        if (GameState.status !== 'playing') return;
+        GameState.timerSec = Math.max(0, GameState.timerSec - 1);
+        $('turn-timer').textContent = `${GameState.timerSec}s`;
+        if (GameState.timerSec === 0) {
+          // On timeout, if host or local, auto-play a legal move so game never stalls
+          if (GameState.playType !== 'online' || NetworkEngine.isHost) {
+            triggerAutoMoveForSeat(GameState.turnSeat, 'novice');
+          }
+        }
+      }, 1000);
+    }
+
+    function resetTurnTimer() {
+      GameState.timerSec = GAME_CONFIG.turnSeconds;
+      $('turn-timer').textContent = `${GameState.timerSec}s`;
+    }
+
+    function stopTurnTimer() {
+      if (GameState.timerInterval) {
+        clearInterval(GameState.timerInterval);
+        GameState.timerInterval = null;
+      }
+    }
+
+    function scheduleAIIfNeeded() {
+      if (GameState.status !== 'playing') return;
+      if (GameState.playType === 'online' && !NetworkEngine.isHost) return;
+      const curP = GameState.players[GameState.turnSeat];
+      if (!curP.isAI && !curP.disconnected) return;
+      if (GameState.aiThinking) return;
+
+      GameState.aiThinking = true;
+      setTimeout(() => {
+        GameState.aiThinking = false;
+        if (GameState.status !== 'playing') return;
+        const p = GameState.players[GameState.turnSeat];
+        if (!p.isAI && !p.disconnected) return;
+        triggerAutoMoveForSeat(GameState.turnSeat, p.aiLevel || 'normal');
+      }, 520);
+    }
+
+    function triggerAutoMoveForSeat(seat, level) {
+      const p = GameState.players[seat];
+      if (GameState.gameMode === 'traditional') {
+        const mv = chooseTraditionalAIMove(GameState.tradBoard, p.side, level);
+        if (mv) applyAction(mv, false);
+      } else {
+        const act = chooseDarkAIAction(GameState.darkBoard, p.side, level);
+        if (act) applyAction(act, false);
+      }
+    }
+
+    /* =========================================================================
+       BOARD SVG & DOM RENDERING (Adaptive Portrait / Landscape / Desktop)
+       ========================================================================= */
+    function drawTraditionalBoardSVG() {
+      const svg = $('traditional-board-svg');
+      const padX = 25, padY = 25, cell = 50;
+      let html = '';
+
+      // Outer Double Border
+      html += `<rect x="${padX - 6}" y="${padY - 6}" width="${cell * 8 + 12}" height="${cell * 9 + 12}" fill="none" stroke="#4a2d13" stroke-width="3" />`;
+      html += `<rect x="${padX}" y="${padY}" width="${cell * 8}" height="${cell * 9}" fill="none" stroke="#4a2d13" stroke-width="1.6" />`;
+
+      // Horizontal lines (10)
+      for (let r = 1; r < 9; r++) {
+        const y = padY + r * cell;
+        html += `<line x1="${padX}" y1="${y}" x2="${padX + cell * 8}" y2="${y}" stroke="#4a2d13" stroke-width="1.3" />`;
+      }
+      // Vertical lines (split by River)
+      for (let c = 1; c < 8; c++) {
+        const x = padX + c * cell;
+        html += `<line x1="${x}" y1="${padY}" x2="${x}" y2="${padY + cell * 4}" stroke="#4a2d13" stroke-width="1.3" />`;
+        html += `<line x1="${x}" y1="${padY + cell * 5}" x2="${x}" y2="${padY + cell * 9}" stroke="#4a2d13" stroke-width="1.3" />`;
+      }
+
+      // Palaces Diagonals
+      html += `<line x1="${padX + 3 * cell}" y1="${padY}" x2="${padX + 5 * cell}" y2="${padY + 2 * cell}" stroke="#4a2d13" stroke-width="1.3" />`;
+      html += `<line x1="${padX + 5 * cell}" y1="${padY}" x2="${padX + 3 * cell}" y2="${padY + 2 * cell}" stroke="#4a2d13" stroke-width="1.3" />`;
+      html += `<line x1="${padX + 3 * cell}" y1="${padY + 7 * cell}" x2="${padX + 5 * cell}" y2="${padY + 9 * cell}" stroke="#4a2d13" stroke-width="1.3" />`;
+      html += `<line x1="${padX + 5 * cell}" y1="${padY + 7 * cell}" x2="${padX + 3 * cell}" y2="${padY + 9 * cell}" stroke="#4a2d13" stroke-width="1.3" />`;
+
+      // Chu River / Han Border Text
+      html += `<text x="${padX + cell * 2}" y="${padY + cell * 4.5 + 8}" text-anchor="middle" font-size="24" font-weight="900" fill="#5c3614" opacity="0.82" font-family="DFKai-SB, Noto Serif TC, serif">楚 河</text>`;
+      html += `<text x="${padX + cell * 6}" y="${padY + cell * 4.5 + 8}" text-anchor="middle" font-size="24" font-weight="900" fill="#5c3614" opacity="0.82" font-family="DFKai-SB, Noto Serif TC, serif">漢 界</text>`;
+
+      // Star Marks for Cannons & Soldiers
+      const stars = [
+        [2,1],[2,7],[7,1],[7,7],
+        [3,0],[3,2],[3,4],[3,6],[3,8],
+        [6,0],[6,2],[6,4],[6,6],[6,8]
+      ];
+      stars.forEach(([r, c]) => {
+        const x = padX + c * cell, y = padY + r * cell;
+        const d = 5, l = 11;
+        if (c > 0) {
+          html += `<path d="M${x-d-l},${y-d} L${x-d},${y-d} L${x-d},${y-d-l}" fill="none" stroke="#4a2d13" stroke-width="1.2"/>`;
+          html += `<path d="M${x-d-l},${y+d} L${x-d},${y+d} L${x-d},${y+d+l}" fill="none" stroke="#4a2d13" stroke-width="1.2"/>`;
+        }
+        if (c < 8) {
+          html += `<path d="M${x+d+l},${y-d} L${x+d},${y-d} L${x+d},${y-d-l}" fill="none" stroke="#4a2d13" stroke-width="1.2"/>`;
+          html += `<path d="M${x+d+l},${y+d} L${x+d},${y+d} L${x+d},${y+d+l}" fill="none" stroke="#4a2d13" stroke-width="1.2"/>`;
+        }
+      });
+
+      svg.innerHTML = html;
+    }
+
+    function renderBoardLayout() {
+      const wrap = $('board-wrapper');
+      const rect = wrap.getBoundingClientRect();
+      const availW = Math.max(200, rect.width - 8);
+      const availH = Math.max(200, rect.height - 8);
+
+      if (GameState.gameMode === 'traditional') {
+        $('traditional-board-container').classList.remove('hidden');
+        $('dark-board-container').classList.add('hidden');
+        // Aspect ratio 9 : 10 (450 : 500 = 0.9)
+        const ratio = 0.9;
+        let w = availW, h = w / ratio;
+        if (h > availH) { h = availH; w = h * ratio; }
+        const cont = $('traditional-board-container');
+        cont.style.width = `${Math.floor(w)}px`;
+        cont.style.height = `${Math.floor(h)}px`;
+      } else {
+        $('traditional-board-container').classList.add('hidden');
+        $('dark-board-container').classList.remove('hidden');
+        // Dark chess adapts orientation: 8 cols x 4 rows on landscape, 4 cols x 8 rows on portrait!
+        const isLandscape = availW >= availH;
+        const ratio = isLandscape ? 2.0 : 0.5;
+        let w = availW, h = w / ratio;
+        if (h > availH) { h = availH; w = h * ratio; }
+        const cont = $('dark-board-container');
+        cont.style.width = `${Math.floor(w)}px`;
+        cont.style.height = `${Math.floor(h)}px`;
+        const grid = $('dark-board-grid');
+        grid.style.gridTemplateColumns = isLandscape ? 'repeat(8, 1fr)' : 'repeat(4, 1fr)';
+        grid.style.gridTemplateRows = isLandscape ? 'repeat(4, 1fr)' : 'repeat(8, 1fr)';
+      }
+    }
+
+    function renderAll() {
+      renderHUD();
+      if (GameState.gameMode === 'traditional') renderTraditionalPieces();
+      else renderDarkBoard();
+    }
+
+    function renderHUD() {
+      const myPerspectiveSeat = GameState.playType === 'local' ? 0 : GameState.mySeat;
+      const oppSeat = 1 - myPerspectiveSeat;
+      const topP = GameState.players[oppSeat];
+      const botP = GameState.players[myPerspectiveSeat];
+
+      const setCard = (prefix, p, isBottom) => {
+        $(`hud-${prefix}-name`).textContent = p.name;
+        const tag = p.disconnected ? '離線\\AI代打' : (p.isAI ? `AI(${p.aiLevel === 'master' ? '大師' : p.aiLevel === 'novice' ? '新手' : '普通'})` : (isBottom && GameState.playType !== 'local' ? '你' : '玩家'));
+        $(`hud-${prefix}-tag`).textContent = tag;
+        $(`hud-${prefix}-wins`).textContent = `勝場: ${p.wins}`;
+        const badge = $(`hud-${prefix}-badge`);
+        if (p.side === 'R') {
+          badge.textContent = '帥';
+          badge.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-black text-sm border-2 shrink-0 bg-red-800 text-amber-100 border-amber-300';
+        } else if (p.side === 'B') {
+          badge.textContent = '將';
+          badge.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-black text-sm border-2 shrink-0 bg-stone-900 text-stone-100 border-stone-400';
+        } else {
+          badge.textContent = '？';
+          badge.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-black text-sm border-2 shrink-0 bg-emerald-900 text-amber-200 border-amber-400';
+        }
+        const capArr = p.side === 'R' ? GameState.capturedByRed : (p.side === 'B' ? GameState.capturedByBlack : []);
+        $(`hud-${prefix}-captured-count`).textContent = `吃子: ${capArr.length}`;
+        $(`hud-${prefix}-captured`).innerHTML = capArr.slice(-8).map((c) =>
+          `<span class="w-4 h-4 rounded-full bg-amber-100 inline-flex items-center justify-center font-bold ${c.side === 'R' ? 'text-red-700' : 'text-stone-900'}">${PIECE_CHARS[c.side][c.type]}</span>`
+        ).join('');
+      };
+
+      setCard('top', topP, false);
+      setCard('bottom', botP, true);
+
+      // Highlight active player's card
+      $('hud-top-player').classList.toggle('ring-2', GameState.turnSeat === oppSeat && GameState.status === 'playing');
+      $('hud-top-player').classList.toggle('ring-amber-400', GameState.turnSeat === oppSeat && GameState.status === 'playing');
+      $('hud-bottom-player').classList.toggle('ring-2', GameState.turnSeat === myPerspectiveSeat && GameState.status === 'playing');
+      $('hud-bottom-player').classList.toggle('ring-amber-400', GameState.turnSeat === myPerspectiveSeat && GameState.status === 'playing');
+
+      // Turn Banner
+      const curP = GameState.players[GameState.turnSeat];
+      const sideStr = curP.side === 'R' ? '紅方' : (curP.side === 'B' ? '黑方' : '先手');
+      $('turn-indicator').textContent = GameState.status === 'playing' ? `${sideStr}回合` : '對局結束';
+      $('turn-indicator').className = `text-xs sm:text-sm font-black tracking-wide animate-pulse truncate w-full text-center ${curP.side === 'R' ? 'text-red-400' : 'text-amber-300'}`;
+      $('match-score-badge').textContent = `${GameState.players[0].wins} : ${GameState.players[1].wins}`;
+
+      // Show End Chain Capture button if applicable
+      const showEndChain = GameState.gameMode === 'dark' && !!GameState.chainPiece && isMyTurnToControl();
+      $('btn-end-chain').classList.toggle('hidden', !showEndChain);
+    }
+
+    function renderTraditionalPieces() {
+      const layer = $('traditional-pieces-layer');
+      layer.innerHTML = '';
+      const flipView = GameState.playType === 'online' && GameState.mySeat === 1;
+      const curP = GameState.players[GameState.turnSeat];
+      const redInCheck = isInCheckTrad(GameState.tradBoard, 'R');
+      const blackInCheck = isInCheckTrad(GameState.tradBoard, 'B');
+
+      const contRect = $('traditional-board-container').getBoundingClientRect();
+      const piecePx = Math.max(20, Math.floor((contRect.width / 9) * 0.88));
+      const fontPx = Math.max(13, Math.floor(piecePx * 0.58));
+
+      for (let r = 0; r < 10; r++) {
+        for (let c = 0; c < 9; c++) {
+          const dr = flipView ? 9 - r : r;
+          const dc = flipView ? 8 - c : c;
+          const leftPct = ((25 + dc * 50) / 450) * 100;
+          const topPct = ((25 + dr * 50) / 500) * 100;
+
+          const cellHit = document.createElement('div');
+          cellHit.style.position = 'absolute';
+          cellHit.style.left = `${leftPct}%`;
+          cellHit.style.top = `${topPct}%`;
+          cellHit.style.width = `${piecePx}px`;
+          cellHit.style.height = `${piecePx}px`;
+          cellHit.style.transform = 'translate(-50%, -50%)';
+          cellHit.className = 'flex items-center justify-center cursor-pointer';
+          cellHit.addEventListener('click', () => onTraditionalCellClick(r, c));
+
+          const p = GameState.tradBoard[r][c];
+          const validMv = GameState.validMoves.find((m) => m.r === r && m.c === c);
+
+          if (p) {
+            const disc = document.createElement('div');
+            disc.className = `chess-piece w-full h-full ${p.side === 'R' ? 'piece-red' : 'piece-black'}`;
+            disc.style.fontSize = `${fontPx}px`;
+            disc.textContent = PIECE_CHARS[p.side][p.type];
+
+            if (GameState.selected && GameState.selected.r === r && GameState.selected.c === c) {
+              disc.classList.add('selected');
+            }
+            if (GameState.lastMove && GameState.lastMove.tr === r && GameState.lastMove.tc === c) {
+              disc.classList.add('last-moved');
+            }
+            if (p.type === 'K' && ((p.side === 'R' && redInCheck) || (p.side === 'B' && blackInCheck))) {
+              disc.classList.add('in-check');
+            }
+            cellHit.appendChild(disc);
+            if (validMv && validMv.isCapture) {
+              const ring = document.createElement('div');
+              ring.className = 'capture-ring';
+              cellHit.appendChild(ring);
+            }
+          } else if (validMv) {
+            const dot = document.createElement('div');
+            dot.className = 'move-dot';
+            cellHit.appendChild(dot);
+          }
+
+          layer.appendChild(cellHit);
+        }
+      }
+    }
+
+    function onTraditionalCellClick(r, c) {
+      if (!isMyTurnToControl()) return;
+      const curSide = GameState.players[GameState.turnSeat].side;
+      const clicked = GameState.tradBoard[r][c];
+
+      // Execute move if clicking a valid destination
+      if (GameState.selected) {
+        const mv = GameState.validMoves.find((m) => m.r === r && m.c === c);
+        if (mv) {
+          applyAction({ fr: GameState.selected.r, fc: GameState.selected.c, tr: r, tc: c }, true);
+          return;
+        }
+      }
+
+      // Select own piece
+      if (clicked && clicked.side === curSide) {
+        GameState.selected = { r, c };
+        GameState.validMoves = getLegalMovesTrad(GameState.tradBoard, r, c);
+        renderTraditionalPieces();
+      } else {
+        GameState.selected = null;
+        GameState.validMoves = [];
+        renderTraditionalPieces();
+      }
+    }
+
+    function renderDarkBoard() {
+      const grid = $('dark-board-grid');
+      grid.innerHTML = '';
+      const cont = $('dark-board-container');
+      const rect = cont.getBoundingClientRect();
+      const isLandscape = rect.width >= rect.height;
+      const cellSize = isLandscape ? rect.width / 8 : rect.width / 4;
+      const fontPx = Math.max(16, Math.floor(cellSize * 0.48));
+
+      // Map visual grid (rows x cols) to logical (4x8)
+      const visRows = isLandscape ? 4 : 8;
+      const visCols = isLandscape ? 8 : 4;
+
+      for (let vr = 0; vr < visRows; vr++) {
+        for (let vc = 0; vc < visCols; vc++) {
+          const r = isLandscape ? vr : vc;
+          const c = isLandscape ? vc : vr;
+          const cell = document.createElement('div');
+          cell.className = 'dark-cell';
+          cell.addEventListener('click', () => onDarkCellClick(r, c));
+
+          const p = GameState.darkBoard[r][c];
+          const validMv = GameState.validMoves.find((m) => m.r === r && m.c === c);
+
+          if (p) {
+            if (!p.revealed) {
+              const hid = document.createElement('div');
+              hid.className = 'dark-piece-hidden';
+              hid.style.fontSize = `${Math.floor(fontPx * 0.72)}px`;
+              hid.textContent = '象';
+              cell.appendChild(hid);
+            } else {
+              const disc = document.createElement('div');
+              disc.className = `chess-piece w-[86%] h-[86%] ${p.side === 'R' ? 'piece-red' : 'piece-black'}`;
+              disc.style.fontSize = `${fontPx}px`;
+              disc.textContent = PIECE_CHARS[p.side][p.type];
+              if (p.justFlipped) disc.classList.add('flip-animate');
+              if (GameState.selected && GameState.selected.r === r && GameState.selected.c === c) disc.classList.add('selected');
+              if (GameState.lastMove && GameState.lastMove.tr === r && GameState.lastMove.tc === c) disc.classList.add('last-moved');
+              cell.appendChild(disc);
+
+              if (validMv && validMv.isCapture) {
+                const ring = document.createElement('div');
+                ring.className = 'capture-ring';
+                cell.appendChild(ring);
+              }
+            }
+          } else if (validMv) {
+            const dot = document.createElement('div');
+            dot.className = 'move-dot';
+            cell.appendChild(dot);
+          }
+          grid.appendChild(cell);
+        }
+      }
+    }
+
+    function onDarkCellClick(r, c) {
+      if (!isMyTurnToControl()) return;
+      const curSide = GameState.players[GameState.turnSeat].side;
+      const clicked = GameState.darkBoard[r][c];
+
+      // If in chain-capture mode, only allow valid capture targets
+      if (GameState.chainPiece) {
+        const mv = GameState.validMoves.find((m) => m.r === r && m.c === c);
+        if (mv) {
+          applyAction({ kind: 'move', fr: GameState.chainPiece.r, fc: GameState.chainPiece.c, tr: r, tc: c }, true);
+        } else {
+          showToast('連吃中：請選擇紅色準星目標，或點擊「結束連吃」', 'info');
+        }
+        return;
+      }
+
+      // Click face-down piece -> flip
+      if (clicked && !clicked.revealed) {
+        applyAction({ kind: 'flip', r, c }, true);
+        return;
+      }
+
+      // Execute move/capture if destination is valid
+      if (GameState.selected) {
+        const mv = GameState.validMoves.find((m) => m.r === r && m.c === c);
+        if (mv) {
+          applyAction({ kind: 'move', fr: GameState.selected.r, fc: GameState.selected.c, tr: r, tc: c }, true);
+          return;
+        }
+      }
+
+      // Select own revealed piece
+      if (clicked && clicked.revealed && GameState.darkColorsAssigned && clicked.side === curSide) {
+        GameState.selected = { r, c };
+        GameState.validMoves = getLegalMovesDark(GameState.darkBoard, r, c);
+        renderDarkBoard();
+      } else {
+        GameState.selected = null;
+        GameState.validMoves = [];
+        renderDarkBoard();
+      }
+    }
+
+    /* =========================================================================
+       PEERJS P2P MULTIPLAYER ENGINE (Host Auth, Heartbeat, Migration, Approval)
+       ========================================================================= */
+    const NetworkEngine = {
+      peer: null,
+      roomCode: '',
+      isHost: false,
+      conns: new Map(), // peerId -> DataConnection
+      hostConn: null,
+      joinOrder: [], // array of { peerId, name, seat }
+      pendingJoinQueue: [], // mid-game join requests
+      heartbeatTimer: null,
+      lastPongMap: new Map(),
+      lastHostBeat: Date.now(),
+
+      cleanup() {
+        if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
+        this.conns.forEach((c) => { try { c.close(); } catch (e) {} });
+        this.conns.clear();
+        if (this.hostConn) { try { this.hostConn.close(); } catch (e) {} this.hostConn = null; }
+        if (this.peer) { try { this.peer.destroy(); } catch (e) {} this.peer = null; }
+        this.pendingJoinQueue = [];
+        this.updatePendingBadge();
+      },
+
+      createRoom() {
+        if (typeof Peer === 'undefined') {
+          showToast('目前環境無法載入 PeerJS，自動切換為單人對戰 AI 模式', 'warn');
+          startQuickAI();
+          return;
+        }
+        this.cleanup();
+        this.roomCode = genRoomCode();
+        this.isHost = true;
+        const myName = getPlayerNickname();
+        const hostId = GAME_CONFIG.peerPrefix + this.roomCode;
+
+        try {
+          this.peer = new Peer(hostId);
+        } catch (err) {
+          showToast('連線初始化受限，自動降級為本機 AI 對戰', 'warn');
+          startQuickAI();
+          return;
+        }
+
+        this.peer.on('open', (id) => {
+          GameState.playType = 'online';
+          GameState.status = 'waiting';
+          GameState.mySeat = 0;
+          GameState.players = [
+            { seat: 0, id, name: myName, isAI: false, aiLevel: 'normal', disconnected: false, side: 'R', wins: 0 },
+            { seat: 1, id: 'ai-1', name: '等待好友加入（可 AI 補滿）', isAI: true, aiLevel: $('lobby-ai-level').value, disconnected: false, side: 'B', wins: 0 }
+          ];
+          this.joinOrder = [{ peerId: id, name: myName, seat: 0 }];
+          enterWaitingRoom();
+          this.startHostHeartbeat();
+          showToast(`房間 ${this.roomCode} 建立成功！`, 'success');
+        });
+
+        this.peer.on('connection', (conn) => this.handleIncomingConnection(conn));
+        this.peer.on('call', (call) => this.handleIncomingCall(call));
+        this.peer.on('error', (err) => {
+          console.warn('PeerJS Host Error:', err);
+          if (GameState.status === 'lobby') {
+            showToast('沙盒環境 WebSocket 受限，已無縫降級為單人 AI 模式', 'warn');
+            startQuickAI();
+          }
+        });
+      },
+
+      joinRoom(code) {
+        const clean = (code || '').trim().toUpperCase();
+        if (!clean) { showToast('請先輸入房間號碼', 'warn'); return; }
+        if (typeof Peer === 'undefined') {
+          showToast('目前環境無法連線，請使用本機或 AI 模式', 'warn');
+          return;
+        }
+        this.cleanup();
+        this.roomCode = clean;
+        this.isHost = false;
+        const myName = getPlayerNickname();
+
+        try {
+          this.peer = new Peer();
+        } catch (e) {
+          showToast('P2P 連線受限，請改用單機模式', 'warn');
+          return;
+        }
+
+        this.peer.on('open', (myId) => {
+          const hostId = GAME_CONFIG.peerPrefix + this.roomCode;
+          const conn = this.peer.connect(hostId, { reliable: true });
+          this.hostConn = conn;
+
+          conn.on('open', () => {
+            conn.send({ type: 'joinRequest', peerId: myId, name: myName });
+            this.lastHostBeat = Date.now();
+            this.startGuestHeartbeat();
+          });
+
+          conn.on('data', (msg) => this.handleGuestMessage(msg));
+          conn.on('close', () => this.onHostDisconnected());
+          conn.on('error', () => showToast('無法連線至該房間，請檢查房號', 'error'));
+        });
+
+        this.peer.on('call', (call) => this.handleIncomingCall(call));
+        this.peer.on('error', () => showToast('找不到房間或網路受限', 'error'));
+      },
+
+      handleIncomingConnection(conn) {
+        conn.on('data', (msg) => {
+          if (msg.type === 'pong') {
+            this.lastPongMap.set(conn.peer, Date.now());
+            return;
+          }
+          if (msg.type === 'joinRequest') {
+            this.conns.set(conn.peer, conn);
+            this.lastPongMap.set(conn.peer, Date.now());
+
+            // 1. Check if returning disconnected human player
+            const returning = GameState.players.find((p) => p.disconnected && p.name === msg.name);
+            if (returning) {
+              returning.disconnected = false;
+              returning.isAI = false;
+              returning.id = conn.peer;
+              showToast(`${msg.name} 已重新連線回到原座位！`, 'success');
+              conn.send({ type: 'joinAccepted', seat: returning.seat, state: this.serializeState() });
+              this.broadcastState();
+              return;
+            }
+
+            // 2. If in waiting room and seat 1 is open (AI placeholder)
+            if (GameState.status === 'waiting') {
+              const aiSeat = GameState.players.find((p) => p.isAI);
+              if (aiSeat) {
+                aiSeat.isAI = false;
+                aiSeat.disconnected = false;
+                aiSeat.id = conn.peer;
+                aiSeat.name = msg.name;
+                this.joinOrder.push({ peerId: conn.peer, name: msg.name, seat: aiSeat.seat });
+                conn.send({ type: 'joinAccepted', seat: aiSeat.seat, state: this.serializeState() });
+                renderWaitingSeats();
+                this.broadcastState();
+                showToast(`${msg.name} 加入房間！`, 'success');
+              } else {
+                conn.send({ type: 'joinRejected', reason: '房間已滿 (2/2)' });
+              }
+              return;
+            }
+
+            // 3. Mid-game Join Approval Queue
+            this.pendingJoinQueue.push({ peerId: conn.peer, name: msg.name, conn });
+            this.updatePendingBadge();
+            conn.send({ type: 'joinPending', msg: '對局進行中，已送出中途加入申請，請等待房主審核...' });
+            showToast(`新玩家【${msg.name}】申請中途加入，請點擊頂部紅色徽章審核`, 'warn', 4500);
+            return;
+          }
+
+          if (msg.type === 'playerAction') {
+            if (msg.seat === GameState.turnSeat && GameState.status === 'playing') {
+              applyAction(msg.action, false);
+            }
+          } else if (msg.type === 'requestSync') {
+            conn.send({ type: 'stateSync', state: this.serializeState() });
+          } else if (msg.type === 'offerDraw') {
+            this.handleIncomingDrawOffer(msg.fromName);
+          } else if (msg.type === 'resign') {
+            finishRound(1 - msg.seat, `${GameState.players[msg.seat].name} 主動認輸`);
+          }
+        });
+
+        conn.on('close', () => this.onGuestDisconnected(conn.peer));
+      },
+
+      onGuestDisconnected(peerId) {
+        this.conns.delete(peerId);
+        const seatP = GameState.players.find((p) => p.id === peerId);
+        if (!seatP) return;
+        if (GameState.status === 'waiting') {
+          seatP.isAI = true;
+          seatP.id = `ai-${seatP.seat}`;
+          seatP.name = '等待好友加入（可 AI 補滿）';
+          renderWaitingSeats();
+        } else if (GameState.status === 'playing') {
+          seatP.disconnected = true;
+          showToast(`${seatP.name} 已斷線，切換為【真人離線\\AI代打】`, 'warn');
+          renderHUD();
+          scheduleAIIfNeeded();
+        }
+        this.broadcastState();
+      },
+
+      startHostHeartbeat() {
+        this.heartbeatTimer = setInterval(() => {
+          const now = Date.now();
+          this.conns.forEach((conn, peerId) => {
+            try { conn.send({ type: 'ping' }); } catch (e) {}
+            const last = this.lastPongMap.get(peerId) || now;
+            if (now - last > GAME_CONFIG.heartbeatTimeoutMs) {
+              this.onGuestDisconnected(peerId);
+            }
+          });
+        }, GAME_CONFIG.heartbeatMs);
+      },
+
+      startGuestHeartbeat() {
+        this.heartbeatTimer = setInterval(() => {
+          if (Date.now() - this.lastHostBeat > GAME_CONFIG.heartbeatTimeoutMs) {
+            this.onHostDisconnected();
+          }
+        }, GAME_CONFIG.heartbeatMs);
+      },
+
+      // Host Migration: Guest promotes itself to Host with original peerPrefix + roomCode
+      onHostDisconnected() {
+        if (this.isHost || GameState.playType !== 'online') return;
+        showToast('房主離線，正在執行自動交接（Host Migration）...', 'warn', 3500);
+        const savedState = this.serializeState();
+        const mySeat = GameState.mySeat;
+        this.cleanup();
+
+        // Take over original room ID
+        this.isHost = true;
+        const hostId = GAME_CONFIG.peerPrefix + this.roomCode;
+        try {
+          this.peer = new Peer(hostId);
+          this.peer.on('open', (id) => {
+            this.applySerializedState(savedState);
+            GameState.mySeat = mySeat;
+            // Old host seat becomes AI takeover
+            const oldHost = GameState.players[1 - mySeat];
+            if (oldHost) oldHost.disconnected = true;
+            GameState.players[mySeat].id = id;
+            showToast('已自動接任新房主，原房主離線座位由 AI 代打！', 'success');
+            renderHUD();
+            this.startHostHeartbeat();
+            scheduleAIIfNeeded();
+          });
+          this.peer.on('connection', (c) => this.handleIncomingConnection(c));
+        } catch (e) {
+          GameState.playType = 'ai';
+          GameState.players[1 - mySeat].isAI = true;
+          showToast('已轉為本機 AI 續戰', 'info');
+          scheduleAIIfNeeded();
+        }
+      },
+
+      handleGuestMessage(msg) {
+        if (msg.type === 'ping') {
+          this.lastHostBeat = Date.now();
+          try { this.hostConn.send({ type: 'pong' }); } catch (e) {}
+          return;
+        }
+        if (msg.type === 'joinAccepted') {
+          GameState.playType = 'online';
+          GameState.mySeat = msg.seat;
+          this.applySerializedState(msg.state);
+          if (GameState.status === 'waiting') enterWaitingRoom();
+          else { switchView('game'); renderBoardLayout(); renderAll(); startTurnTimer(); }
+          showToast(`成功加入房間 ${this.roomCode}！`, 'success');
+          return;
+        }
+        if (msg.type === 'joinPending') {
+          showToast(msg.msg, 'info', 4000);
+          return;
+        }
+        if (msg.type === 'joinRejected') {
+          showToast(msg.reason || '無法加入房間', 'error');
+          this.cleanup();
+          return;
+        }
+        if (msg.type === 'stateSync') {
+          const prevStatus = GameState.status;
+          this.applySerializedState(msg.state);
+          if (GameState.status === 'waiting') {
+            renderWaitingSeats();
+          } else if (GameState.status === 'playing') {
+            if (prevStatus !== 'playing') {
+              switchView('game');
+              renderBoardLayout();
+              startTurnTimer();
+            }
+            renderAll();
+          } else if (GameState.status === 'ended' && msg.extra?.roundEnded) {
+            renderAll();
+            stopTurnTimer();
+            showSettlementModal(msg.extra.winnerSeat, msg.extra.reason);
+          }
+        } else if (msg.type === 'offerDraw') {
+          this.handleIncomingDrawOffer(msg.fromName);
+        }
+      },
+
+      async handleIncomingDrawOffer(fromName) {
+        const ok = await showConfirmModal('🤝 對手提議和局', `玩家 <b>${fromName}</b> 提議本局握手言和，是否同意？`, '同意和局', '繼續對弈');
+        if (ok) {
+          if (this.isHost) finishRound(-1, '雙方協議和局');
+          else this.sendToHost({ type: 'acceptDraw' });
+        }
+      },
+
+      serializeState() {
+        return {
+          gameMode: GameState.gameMode,
+          matchFormat: GameState.matchFormat,
+          chainCaptureEnabled: GameState.chainCaptureEnabled,
+          players: GameState.players,
+          turnSeat: GameState.turnSeat,
+          status: GameState.status,
+          turnsCount: GameState.turnsCount,
+          noProgressCount: GameState.noProgressCount,
+          tradBoard: GameState.tradBoard,
+          darkBoard: GameState.darkBoard,
+          darkColorsAssigned: GameState.darkColorsAssigned,
+          lastMove: GameState.lastMove,
+          chainPiece: GameState.chainPiece,
+          capturedByRed: GameState.capturedByRed,
+          capturedByBlack: GameState.capturedByBlack
+        };
+      },
+
+      applySerializedState(s) {
+        Object.assign(GameState, s);
+      },
+
+      broadcastState(extra = null) {
+        const payload = { type: 'stateSync', state: this.serializeState(), extra };
+        this.conns.forEach((c) => { try { c.send(payload); } catch (e) {} });
+      },
+
+      sendToHost(msg) {
+        if (this.hostConn && this.hostConn.open) {
+          this.hostConn.send(msg);
+        }
+      },
+
+      updatePendingBadge() {
+        const btn = $('btn-pending-joins');
+        const cnt = this.pendingJoinQueue.length;
+        $('pending-join-count').textContent = cnt;
+        btn.classList.toggle('hidden', !this.isHost || cnt === 0);
+      },
+
+      async openApprovalModal() {
+        if (this.pendingJoinQueue.length === 0) return;
+        const req = this.pendingJoinQueue[0];
+        const aiSeat = GameState.players.find((p) => p.isAI || p.disconnected);
+        if (!aiSeat) {
+          showToast('目前無 AI 或離線空位可供接替，絕不踢除在線真人', 'warn');
+          req.conn.send({ type: 'joinRejected', reason: '目前無空位可接替' });
+          this.pendingJoinQueue.shift();
+          this.updatePendingBadge();
+          return;
+        }
+        const ok = await showConfirmModal(
+          '🔔 中途加入審核',
+          `玩家 <b>${req.name}</b> 申請加入，是否指派其接替 <b>座位 ${aiSeat.seat + 1} (${aiSeat.name})</b>？`,
+          '核准接替',
+          '婉拒'
+        );
+        this.pendingJoinQueue.shift();
+        this.updatePendingBadge();
+        if (ok) {
+          aiSeat.isAI = false;
+          aiSeat.disconnected = false;
+          aiSeat.id = req.peerId;
+          aiSeat.name = req.name;
+          req.conn.send({ type: 'joinAccepted', seat: aiSeat.seat, state: this.serializeState() });
+          this.broadcastState();
+          renderHUD();
+          showToast(`已核准 ${req.name} 接替對戰！`, 'success');
+        } else {
+          req.conn.send({ type: 'joinRejected', reason: '房主未核准中途加入' });
+        }
+      },
+
+      callPeersWithVoice() {
+        if (!this.peer || !VoiceChatEngine.processedStream) return;
+        if (this.isHost) {
+          this.conns.forEach((_, peerId) => {
+            const call = this.peer.call(peerId, VoiceChatEngine.processedStream);
+            call.on('stream', (rs) => VoiceChatEngine.attachRemoteStream(rs));
+          });
+        } else if (this.hostConn) {
+          const call = this.peer.call(GAME_CONFIG.peerPrefix + this.roomCode, VoiceChatEngine.processedStream);
+          call.on('stream', (rs) => VoiceChatEngine.attachRemoteStream(rs));
+        }
+      },
+
+      handleIncomingCall(call) {
+        call.answer(VoiceChatEngine.processedStream || undefined);
+        call.on('stream', (rs) => VoiceChatEngine.attachRemoteStream(rs));
+      }
+    };
+
+    /* =========================================================================
+       VIEW NAVIGATION & UI BINDINGS
+       ========================================================================= */
+    function switchView(name) {
+      $('view-lobby').classList.toggle('hidden', name !== 'lobby');
+      $('view-waiting').classList.toggle('hidden', name !== 'waiting');
+      $('view-game').classList.toggle('hidden', name !== 'game');
+    }
+
+    function getPlayerNickname() {
+      const v = $('input-nickname').value.trim();
+      const name = v || `棋士${Math.floor(100 + Math.random() * 899)}`;
+      localStorage.setItem('xq_nickname', name);
+      return name;
+    }
+
+    function updateLobbyModeButtons() {
+      const isTrad = GameState.gameMode === 'traditional';
+      $('mode-btn-traditional').className = `py-2 px-2 rounded-xl text-xs sm:text-sm font-bold border transition ${isTrad ? 'bg-amber-500 text-stone-950 border-amber-200 shadow' : 'bg-black/40 text-amber-100 border-amber-500/30'}`;
+      $('mode-btn-dark').className = `py-2 px-2 rounded-xl text-xs sm:text-sm font-bold border transition ${!isTrad ? 'bg-amber-500 text-stone-950 border-amber-200 shadow' : 'bg-black/40 text-amber-100 border-amber-500/30'}`;
+      $('wrap-chain-capture').classList.toggle('hidden', isTrad);
+      $('wrap-chain-capture').classList.toggle('flex', !isTrad);
+    }
+
+    function enterWaitingRoom() {
+      switchView('waiting');
+      $('wait-room-code').textContent = NetworkEngine.roomCode;
+      $('wait-mode-badge').textContent = GameState.gameMode === 'traditional' ? '傳統大盤 (9×10)' : '台灣暗棋 (4×8)';
+      $('wait-switch-mode').value = GameState.gameMode;
+      $('wait-switch-format').value = GameState.matchFormat;
+      $('wait-host-actions').classList.toggle('hidden', !NetworkEngine.isHost);
+      $('wait-guest-hint').classList.toggle('hidden', NetworkEngine.isHost);
+
+      const inviteUrl = `${window.location.origin}${window.location.pathname}?room=${NetworkEngine.roomCode}`;
+      $('wait-invite-url').textContent = inviteUrl;
+      const qrBox = $('qrcode-box');
+      qrBox.innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(qrBox, { text: inviteUrl, width: 132, height: 132, colorDark: '#1c1410', colorLight: '#ffffff' });
+      }
+      renderWaitingSeats();
+    }
+
+    function renderWaitingSeats() {
+      const list = $('wait-seats-list');
+      list.innerHTML = '';
+      GameState.players.forEach((p, idx) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between gap-2 bg-black/40 rounded-xl px-3 py-2 border border-amber-500/25';
+        row.innerHTML = `
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${idx === 0 ? 'bg-red-800 text-amber-100' : 'bg-stone-800 text-stone-100'}">${idx === 0 ? '先' : '後'}</span>
+            <span class="text-xs sm:text-sm font-bold text-amber-100 truncate">${p.name}</span>
+          </div>
+          ${p.isAI && NetworkEngine.isHost ? `
+            <select data-seat="${idx}" class="seat-ai-select px-2 py-1 rounded-lg bg-black/60 border border-amber-400/35 text-xs text-amber-200">
+              <option value="novice" ${p.aiLevel === 'novice' ? 'selected' : ''}>AI: 放水新手</option>
+              <option value="normal" ${p.aiLevel === 'normal' ? 'selected' : ''}>AI: 普通棋士</option>
+              <option value="master" ${p.aiLevel === 'master' ? 'selected' : ''}>AI: 大師宗師</option>
+            </select>
+          ` : `<span class="text-[11px] px-2 py-0.5 rounded bg-emerald-600/30 text-emerald-200">${p.isAI ? 'AI' : '真人就緒'}</span>`}
+        `;
+        list.appendChild(row);
+      });
+      list.querySelectorAll('.seat-ai-select').forEach((sel) => {
+        sel.addEventListener('change', (e) => {
+          const s = Number(e.target.dataset.seat);
+          GameState.players[s].aiLevel = e.target.value;
+        });
+      });
+    }
+
+    function startQuickAI() {
+      NetworkEngine.cleanup();
+      GameState.playType = 'ai';
+      GameState.mySeat = 0;
+      const lvl = $('lobby-ai-level').value;
+      const lvlName = lvl === 'master' ? '電腦宗師' : (lvl === 'novice' ? '新手電腦' : '普通電腦');
+      GameState.players = [
+        { seat: 0, id: 'local-0', name: getPlayerNickname(), isAI: false, aiLevel: 'normal', disconnected: false, side: 'R', wins: 0 },
+        { seat: 1, id: 'ai-1', name: lvlName, isAI: true, aiLevel: lvl, disconnected: false, side: 'B', wins: 0 }
+      ];
+      startNewRound(true);
+    }
+
+    function startQuickLocal() {
+      NetworkEngine.cleanup();
+      GameState.playType = 'local';
+      GameState.mySeat = 0;
+      GameState.players = [
+        { seat: 0, id: 'local-0', name: getPlayerNickname(), isAI: false, aiLevel: 'normal', disconnected: false, side: 'R', wins: 0 },
+        { seat: 1, id: 'local-1', name: '玩家二 (本機)', isAI: false, aiLevel: 'normal', disconnected: false, side: 'B', wins: 0 }
+      ];
+      startNewRound(true);
+    }
+
+    /* =========================================================================
+       EVENT LISTENERS & INITIALIZATION
+       ========================================================================= */
+    function bindAllEvents() {
+      // Top Bar
+      $('btn-wake-lock').addEventListener('click', () => ScreenWakeLockManager.toggle());
+      $('btn-fullscreen').addEventListener('click', toggleFullscreen);
+      $('btn-open-settings').addEventListener('click', () => $('modal-settings').classList.remove('hidden'));
+      $('btn-close-settings').addEventListener('click', () => $('modal-settings').classList.add('hidden'));
+      $('btn-close-settings-x').addEventListener('click', () => $('modal-settings').classList.add('hidden'));
+      $('btn-pending-joins').addEventListener('click', () => NetworkEngine.openApprovalModal());
+
+      // Rules Modal
+      $('btn-open-rules').addEventListener('click', () => $('modal-rules').classList.remove('hidden'));
+      $('btn-close-rules').addEventListener('click', () => $('modal-rules').classList.add('hidden'));
+      $('btn-close-rules-x').addEventListener('click', () => $('modal-rules').classList.add('hidden'));
+
+      // Lobby Controls
+      $('mode-btn-traditional').addEventListener('click', () => { GameState.gameMode = 'traditional'; updateLobbyModeButtons(); });
+      $('mode-btn-dark').addEventListener('click', () => { GameState.gameMode = 'dark'; updateLobbyModeButtons(); });
+      $('select-match-format').addEventListener('change', (e) => { GameState.matchFormat = e.target.value; });
+      $('chk-chain-capture').addEventListener('change', (e) => { GameState.chainCaptureEnabled = e.target.checked; });
+
+      $('btn-create-room').addEventListener('click', () => NetworkEngine.createRoom());
+      $('btn-quick-ai').addEventListener('click', startQuickAI);
+      $('btn-quick-local').addEventListener('click', startQuickLocal);
+      $('btn-join-room').addEventListener('click', () => NetworkEngine.joinRoom($('input-room-code').value));
+
+      // Waiting Room
+      $('btn-copy-invite').addEventListener('click', () => copyTextFallback($('wait-invite-url').textContent));
+      $('btn-leave-waiting').addEventListener('click', () => { NetworkEngine.cleanup(); GameState.status = 'lobby'; switchView('lobby'); });
+      $('wait-batch-ai').addEventListener('change', (e) => {
+        GameState.players.forEach((p) => { if (p.isAI) p.aiLevel = e.target.value; });
+        renderWaitingSeats();
+      });
+      $('wait-switch-mode').addEventListener('change', (e) => {
+        GameState.gameMode = e.target.value;
+        $('wait-mode-badge').textContent = GameState.gameMode === 'traditional' ? '傳統大盤 (9×10)' : '台灣暗棋 (4×8)';
+        if (NetworkEngine.isHost) NetworkEngine.broadcastState();
+      });
+      $('wait-switch-format').addEventListener('change', (e) => {
+        GameState.matchFormat = e.target.value;
+        if (NetworkEngine.isHost) NetworkEngine.broadcastState();
+      });
+      $('btn-start-match').addEventListener('click', () => {
+        const ai = GameState.players[1];
+        if (ai.isAI) ai.name = `電腦(${ai.aiLevel === 'master' ? '大師' : ai.aiLevel === 'novice' ? '新手' : '普通'})`;
+        startNewRound(true);
+      });
+      $('btn-wait-mic').addEventListener('click', () => VoiceChatEngine.toggleMic());
+      $('btn-wait-speaker').addEventListener('click', () => VoiceChatEngine.toggleSpeaker());
+
+      // In-Game Controls
+      $('btn-end-chain').addEventListener('click', () => applyAction({ kind: 'endChain' }, true));
+      $('btn-undo').addEventListener('click', undoMove);
+      $('btn-game-mic').addEventListener('click', () => VoiceChatEngine.toggleMic());
+      $('btn-sync-nudge').addEventListener('click', () => {
+        if (GameState.playType === 'online') {
+          if (NetworkEngine.isHost) { NetworkEngine.broadcastState(); showToast('已強制廣播最新棋盤狀態', 'success'); }
+          else { NetworkEngine.sendToHost({ type: 'requestSync' }); showToast('已向房主請求同步狀態', 'info'); }
+        } else {
+          renderBoardLayout();
+          renderAll();
+          showToast('已重新整理棋盤畫面', 'info');
+        }
+      });
+
+      $('btn-offer-draw').addEventListener('click', async () => {
+        if (GameState.status !== 'playing') return;
+        const ok = await showConfirmModal('🤝 提議和局', '確定要提議本局和局嗎？', '提出和局', '取消');
+        if (!ok) return;
+        if (GameState.playType === 'online') {
+          const myName = GameState.players[GameState.mySeat].name;
+          if (NetworkEngine.isHost) NetworkEngine.conns.forEach((c) => c.send({ type: 'offerDraw', fromName: myName }));
+          else NetworkEngine.sendToHost({ type: 'offerDraw', fromName: myName });
+          showToast('已送出和局請求，等待對手回應', 'info');
+        } else {
+          finishRound(-1, '雙方協議和局');
+        }
+      });
+
+      $('btn-resign').addEventListener('click', async () => {
+        if (GameState.status !== 'playing') return;
+        const ok = await showConfirmModal('🏳️ 確定認輸', '認輸後將直接判對手贏得本局，確定要認輸嗎？', '確定認輸', '繼續奮戰');
+        if (!ok) return;
+        const myS = GameState.playType === 'local' ? GameState.turnSeat : GameState.mySeat;
+        if (GameState.playType === 'online' && !NetworkEngine.isHost) {
+          NetworkEngine.sendToHost({ type: 'resign', seat: myS });
+        } else {
+          finishRound(1 - myS, `${GameState.players[myS].name} 主動認輸`);
+        }
+      });
+
+      $('btn-exit-game').addEventListener('click', async () => {
+        const ok = await showConfirmModal('🚪 返回大廳', '確定要離開目前對局並返回大廳嗎？', '返回大廳', '取消');
+        if (!ok) return;
+        stopTurnTimer();
+        NetworkEngine.cleanup();
+        GameState.status = 'lobby';
+        switchView('lobby');
+      });
+
+      // Settlement Modal
+      $('btn-settle-lobby').addEventListener('click', () => {
+        $('modal-settlement').classList.add('hidden');
+        NetworkEngine.cleanup();
+        GameState.status = 'lobby';
+        switchView('lobby');
+      });
+      $('btn-settle-next').addEventListener('click', () => {
+        $('modal-settlement').classList.add('hidden');
+        const need = GameState.matchFormat === 'BO3' ? 2 : 1;
+        const resetSeries = GameState.players[0].wins >= need || GameState.players[1].wins >= need;
+        if (GameState.playType === 'online' && !NetworkEngine.isHost) {
+          showToast('請等待房主開啟下一局', 'info');
+          return;
+        }
+        startNewRound(resetSeries);
+      });
+
+      // Champion Reward Modal
+      $('btn-download-cert').addEventListener('click', () => VictoryRewardManager.downloadCertificate());
+      $('btn-download-hidden').addEventListener('click', () => VictoryRewardManager.downloadHiddenImage());
+      $('btn-champ-close').addEventListener('click', () => $('modal-champion').classList.add('hidden'));
+      $('champ-hidden-preview-box').addEventListener('click', () => {
+        $('lightbox-img').src = $('champ-hidden-img').src;
+        $('modal-lightbox').classList.remove('hidden');
+      });
+      $('modal-lightbox').addEventListener('click', () => $('modal-lightbox').classList.add('hidden'));
+
+      // Settings Controls
+      $('set-sfx').addEventListener('change', (e) => { AudioMediaEngine.sfxEnabled = e.target.checked; });
+      $('set-tts').addEventListener('change', (e) => { AudioMediaEngine.ttsEnabled = e.target.checked; });
+      $('set-bgm').addEventListener('change', (e) => {
+        AudioMediaEngine.bgmEnabled = e.target.checked;
+        if (e.target.checked) AudioMediaEngine.startBgm();
+        else AudioMediaEngine.stopBgm();
+      });
+      $('set-mute-all').addEventListener('change', (e) => {
+        AudioMediaEngine.muted = e.target.checked;
+        if (e.target.checked) AudioMediaEngine.stopBgm();
+        else if (AudioMediaEngine.bgmEnabled) AudioMediaEngine.startBgm();
+      });
+      $('set-bgm-vol').addEventListener('input', (e) => {
+        const v = Number(e.target.value);
+        $('val-bgm-vol').textContent = `${v}%`;
+        AudioMediaEngine.bgmVolume = v / 100;
+        if (AudioMediaEngine.customAudio) AudioMediaEngine.customAudio.volume = AudioMediaEngine.bgmVolume;
+      });
+      $('input-custom-bgm').addEventListener('change', (e) => {
+        if (e.target.files?.[0]) AudioMediaEngine.loadCustomAudio(e.target.files[0]);
+      });
+      $('btn-reset-bgm').addEventListener('click', () => AudioMediaEngine.resetDefaultBgm());
+
+      $('set-mic-gain').addEventListener('input', (e) => {
+        const v = Number(e.target.value);
+        $('val-mic-gain').textContent = `${v}%`;
+        VoiceChatEngine.setMicGain(v);
+      });
+      $('set-spk-gain').addEventListener('input', (e) => {
+        const v = Number(e.target.value);
+        $('val-spk-gain').textContent = `${v}%`;
+        VoiceChatEngine.setSpeakerGain(v);
+      });
+
+      // Wallpaper Settings
+      $('set-wp-enabled').addEventListener('change', (e) => {
+        WallpaperManager.enabled = e.target.checked;
+        WallpaperManager.renderCurrent();
+        WallpaperManager.restartTimer();
+      });
+      $('set-wp-mode').addEventListener('change', (e) => {
+        WallpaperManager.mode = e.target.value;
+        WallpaperManager.restartTimer();
+      });
+      $('btn-wp-next').addEventListener('click', () => WallpaperManager.next());
+      $('set-wp-interval').addEventListener('input', (e) => {
+        const v = Number(e.target.value);
+        $('val-wp-interval').textContent = `${v}s`;
+        WallpaperManager.intervalSec = v;
+        WallpaperManager.restartTimer();
+      });
+      $('set-wp-dim').addEventListener('input', (e) => {
+        const v = Number(e.target.value);
+        $('val-wp-dim').textContent = `${v}%`;
+        WallpaperManager.dimPct = v;
+        WallpaperManager.applyVisualFilters();
+      });
+      $('set-wp-blur').addEventListener('input', (e) => {
+        const v = Number(e.target.value);
+        $('val-wp-blur').textContent = `${v}px`;
+        WallpaperManager.blurPx = v;
+        WallpaperManager.applyVisualFilters();
+      });
+      $('input-wp-upload').addEventListener('change', (e) => WallpaperManager.uploadCustomFiles(e.target.files));
+      $('btn-wp-reload-gh').addEventListener('click', () => {
+        WallpaperManager.scanGitHubFolder();
+        showToast('已重新掃描 GitHub 桌布資料夾', 'info');
+      });
+      $('btn-wp-clear-custom').addEventListener('click', () => WallpaperManager.clearCustom());
+
+      // Victory Reward Settings
+      $('set-reward-mode').addEventListener('change', (e) => {
+        GAME_CONFIG.victoryReward.mode = e.target.value;
+      });
+      $('input-hidden-reward').addEventListener('change', (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          GAME_CONFIG.victoryReward.customHiddenDataUrl = reader.result;
+          showToast(`已指派自訂隱藏獎勵圖檔：${f.name}`, 'success');
+        };
+        reader.readAsDataURL(f);
+      });
+      $('btn-test-reward').addEventListener('click', () => {
+        $('modal-settings').classList.add('hidden');
+        VictoryRewardManager.triggerFinalChampionReward(
+          { name: getPlayerNickname() },
+          { modeLabel: GameState.gameMode === 'traditional' ? '傳統大盤象棋' : '台灣暗棋', opponentName: '電腦大師', seriesScore: '2 : 0', turns: 42, capturedCount: 11 }
+        );
+      });
+
+      // Responsive Resize
+      window.addEventListener('resize', () => {
+        if (GameState.status === 'playing' || GameState.status === 'ended') {
+          renderBoardLayout();
+          renderAll();
+        }
+      });
+    }
+
+    function boot() {
+      const savedName = localStorage.getItem('xq_nickname');
+      if (savedName) $('input-nickname').value = savedName;
+
+      drawTraditionalBoardSVG();
+      updateLobbyModeButtons();
+      bindAllEvents();
+      WallpaperManager.init();
+
+      // Auto-fill ?room=XXXXX from URL
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if (roomParam) {
+        $('input-room-code').value = roomParam.toUpperCase();
+        showToast(`已自動帶入邀請房號：${roomParam.toUpperCase()}`, 'info');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', boot);
+  })();
+  </script>
+</body>
+</html>
